@@ -1,1 +1,121 @@
-# aion-products
+# AION Revenue Copilot
+
+**Phase 4 — AION Products · MISSION-001**
+_Conversation → Intelligence → Action → Conversion_
+
+A live, context-aware sales-intelligence system. It treats a sales call as a
+first-class data stream: it interprets the conversation as it happens, fuses it
+with business/prospect context, maintains a live interpretation of the deal,
+tells the rep what matters right now, and turns every call into durable,
+structured revenue data with full traceability.
+
+> North Star: **increase the probability that a real sales conversation
+> progresses toward revenue** — measured as conversion-stage advancement, not a
+> single "did they buy" boolean.
+
+---
+
+## Why this is not "AI that fills out applications"
+
+Revenue Copilot optimizes **conversion progression along a configurable ladder**,
+not one terminal outcome. The platform intelligence is reusable; the sales
+schema is per-business:
+
+```
+        REVENUE COPILOT (reusable engines)
+                     │
+     ┌───────────────┼────────────────┐
+   Funding        AION B2B         Contractor
+  Contact→…→      Cold Call→…→     Lead→…→
+  Application     Audit            Estimate
+```
+
+## The loop
+
+```
+ PROSPECT + BUSINESS + REP CONTEXT + LIVE CONVERSATION
+                     │
+                     ▼
+   ┌─────────────────────────────────────────┐
+   │  AION CORE  (governs every AI execution) │
+   │   Context · Extraction · Stage · Gaps    │
+   │   Objection · Readiness · Next-Best-Action│
+   └─────────────────────────────────────────┘
+                     │
+              LIVE REP GUIDANCE
+                     ▼
+     REP ACTION → CUSTOMER RESPONSE → CONVERSION EVENT
+                     ▼
+        DURABLE CALL INTELLIGENCE + LEARNING LINEAGE
+```
+
+Six real-time responsibilities, each an engine governed by the Core:
+
+1. **Information extraction** — unstructured talk → structured fact slots.
+2. **Conversation-state detection** — opening → discovery → … → closing, + sentiment.
+3. **Gap detection** — "trying to close but urgency isn't established."
+4. **Objection intelligence** — interpret the *underlying concern*, not a keyword.
+5. **Next-best-action** — the highest-leverage move right now.
+6. **Conversion readiness** — explainable signals, not an opaque percentage.
+
+## Run it
+
+No build step, no API key required. The whole loop runs deterministically
+offline; set `ANTHROPIC_API_KEY` to route the AI steps through Claude (governed
+by the Core, with automatic deterministic fallback).
+
+```bash
+npm install
+npm run demo                 # replay a call, see live guidance + post-call report
+npm run demo:contractor      # a different industry / ladder
+npm run eval                 # Mission-001 gate scorecard over the fixture set
+npm test                     # unit + integration + gate tests
+npm run typecheck
+```
+
+Requires Node ≥ 22.18 (uses native TypeScript type-stripping — `.ts` runs directly).
+
+Point the demo at any labeled fixture:
+
+```bash
+node src/cli/demo.ts --fixture funding-discovery-call
+node src/cli/demo.ts --fixture aion-b2b-discovery-call --quiet
+```
+
+## Using it as a library
+
+```ts
+import { createCopilot, buildReport, getSchema } from './src/aion.ts';
+
+const { copilot, core } = await createCopilot({
+  callId, industry: 'funding', context, // ContextInput: prospect/company/offer/CRM/priors
+});
+
+for (const turn of turns) {
+  const update = await copilot.ingest(turn);   // live state + ranked guidance
+  // ... surface update.recommendations to the rep ...
+  copilot.recordFeedback(recId, 'acted_on', turn.index); // the rep-value loop
+}
+
+const report = buildReport(copilot, core, getSchema('funding')); // durable CallIntelligence
+```
+
+## Layout
+
+```
+src/
+  core/        AION Core: governance policy, model providers, tracing/lineage
+  domain/      ladder, facts, deal state, objections, recommendations, lineage, report
+  config/      SalesSchema + industry configs (funding, aion-b2b, contractor)
+  engines/     context · extraction · stage · signals · objection · gaps · readiness · nba · ladder
+  pipeline/    LiveCopilot (the live loop) + post-call report builder
+  eval/        evaluation harness that scores the Mission-001 gates
+  cli/         demo + evaluate runners
+fixtures/      labeled transcripts (synthetic evaluation set)
+test/          node:test suites
+docs/          MISSION-001, ARCHITECTURE, GATES
+```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and
+[`docs/GATES.md`](docs/GATES.md) for how the mission gates are measured and what
+production validation still requires.

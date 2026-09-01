@@ -1,0 +1,34 @@
+{
+  "name": "aion-revenue-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AION Revenue Copilot — live, context-aware conversion intelligence for sales conversations (MISSION-001).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test",
+    "demo": "node src/cli/demo.ts",
+    "demo:contractor": "node src/cli/demo.ts --fixture contractor-audit-call",
+    "demo:funding": "node src/cli/demo.ts --fixture funding-discovery-call",
+    "eval": "node src/cli/evaluate.ts"
+  },
+  "keywords": [
+    "aion",
+    "sales-intelligence",
+    "conversion",
+    "revenue-copilot",
+    "claude"
+  ],
+  "author": "AION",
+  "license": "UNLICENSED",
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.122.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
