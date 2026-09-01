@@ -4,7 +4,7 @@
  */
 
 import type { LiveCopilot } from './copilot.ts';
-import type { Core } from '../core/core.ts';
+import type { AiExecutionService } from '../platform/ai-execution.ts';
 import type { SalesSchema } from '../config/schema.ts';
 import type { CallIntelligence, CallOutcome } from '../domain/report.ts';
 import type { Turn } from '../domain/types.ts';
@@ -23,7 +23,7 @@ function talkRepShare(transcript: Turn[]): number {
   return total === 0 ? 0 : Number((rep / total).toFixed(3));
 }
 
-export function buildReport(copilot: LiveCopilot, core: Core, schema: SalesSchema): CallIntelligence {
+export function buildReport(copilot: LiveCopilot, exec: AiExecutionService, schema: SalesSchema): CallIntelligence {
   const state = copilot.currentState();
   const transcript = copilot.getTranscript();
   const surfaced = copilot.getSurfaced();
@@ -56,7 +56,7 @@ export function buildReport(copilot: LiveCopilot, core: Core, schema: SalesSchem
   // Qualification + CRM-write governance.
   const crmWritable: string[] = [];
   for (const slot of Object.values(state.facts)) {
-    if (slot && core.canAutoWriteFact(slot)) crmWritable.push(slot.key);
+    if (slot && exec.canAutoWriteFact(slot)) crmWritable.push(slot.key);
   }
 
   const painPoints = [state.facts.pain?.value, state.facts.need?.value].filter((v): v is string => !!v);
@@ -114,7 +114,7 @@ export function buildReport(copilot: LiveCopilot, core: Core, schema: SalesSchem
       valuableRate,
       conversionEvents,
     },
-    trace: core.tracer.summary(),
+    trace: exec.traceSummary(),
   };
 }
 

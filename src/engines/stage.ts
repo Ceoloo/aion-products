@@ -5,8 +5,8 @@
  * prospect's emotional read. This is distinct from the deal's ladder position.
  */
 
-import type { Core } from '../core/core.ts';
-import type { AiTask } from '../core/task.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { ConversationStage, Sentiment, Turn } from '../domain/types.ts';
 import { CONVERSATION_STAGES } from '../domain/types.ts';
 import { containsAny, extractJson, normalize } from './lib/text.ts';
@@ -84,7 +84,7 @@ export function stageTask(input: StageInput): AiTask<StageInput, StageResult> {
   };
 }
 
-export async function runStage(core: Core, input: StageInput): Promise<StageResult> {
-  const { output } = await core.run(stageTask(input));
+export async function runStage(exec: AiExecutor, input: StageInput): Promise<StageResult> {
+  const { output } = await exec.run(stageTask(input));
   return output;
 }

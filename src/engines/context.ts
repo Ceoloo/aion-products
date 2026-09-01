@@ -6,8 +6,8 @@
  * live state.
  */
 
-import type { Core } from '../core/core.ts';
-import type { AiTask } from '../core/task.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { PreCallContext } from '../domain/context.ts';
 import { extractJson } from './lib/text.ts';
 import { renderContextBrief } from './lib/render.ts';
@@ -59,7 +59,7 @@ export function contextTask(input: ContextInput): AiTask<ContextInput, string> {
   };
 }
 
-export async function assembleContext(core: Core, input: ContextInput): Promise<PreCallContext> {
-  const { output: briefing } = await core.run(contextTask(input));
+export async function assembleContext(exec: AiExecutor, input: ContextInput): Promise<PreCallContext> {
+  const { output: briefing } = await exec.run(contextTask(input));
   return { ...input, briefing };
 }

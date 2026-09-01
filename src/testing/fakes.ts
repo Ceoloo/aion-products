@@ -1,11 +1,11 @@
 /**
- * Test doubles for the LLM provider, so the Core's governed LLM path (parsing,
- * tracing, fallback) can be exercised without network or keys.
+ * Test doubles for the LLM provider, so the governed LLM path (parsing,
+ * tracing, fallback) through @aion/core can be exercised without network or keys.
  */
 
-import type { LlmProvider, LlmRequest, LlmResponse } from '../core/llm.ts';
+import type { LlmProvider, LlmRequest, LlmResponse } from '../platform/provider-adapter.ts';
 
-/** Always throws — used to prove the Core falls back to the deterministic path. */
+/** Always throws — used to prove execution falls back to the deterministic path. */
 export class ThrowingLlm implements LlmProvider {
   readonly name = 'throwing-fake';
   async complete(_req: LlmRequest): Promise<LlmResponse> {

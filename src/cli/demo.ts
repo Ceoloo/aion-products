@@ -26,14 +26,14 @@ async function main(): Promise<void> {
   const fixture = getFixture(fixtureId);
   const schema = getSchema(fixture.industry);
 
-  const { copilot, core } = await createCopilot({
+  const { copilot, exec } = await createCopilot({
     callId: `demo_${fixture.id}`,
     industry: fixture.industry,
     context: fixture.context,
   });
 
   console.log(h1(`AION REVENUE COPILOT — ${fixture.title}`));
-  console.log(`  Industry: ${schema.label}   AI path: ${core.llmAvailable ? 'Claude (governed)' : 'deterministic (no key)'}`);
+  console.log(`  Industry: ${schema.label}   AI path: ${exec.llmAvailable() ? 'Claude (governed by @aion/core)' : 'deterministic (no key, governed by @aion/core)'}`);
   console.log(`\n  PRE-CALL BRIEFING\n  ${copilot.context.briefing}`);
 
   for (const turn of fixture.turns) {
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     console.log(recsBlock(update.recommendations));
   }
 
-  console.log(report(buildReport(copilot, core, schema)));
+  console.log(report(buildReport(copilot, exec, schema)));
 }
 
 main().catch((e) => {

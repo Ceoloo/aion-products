@@ -6,13 +6,14 @@
  * records the rep-value feedback loop, and accumulates the learning lineage.
  * `finish()` freezes everything into a durable CallIntelligence record.
  *
- * Every AI step is submitted to the Core, so the whole loop travels the
+ * Every AI step is submitted to the AiExecutionService, which routes it through
+ * the canonical @aion/core control plane, so the whole loop travels the
  * Mission-001 technical path: transcript → live interpretation → structured
  * state → Core-governed execution → recommendation → rep interaction → outcome
- * → durable record, with full traceability.
+ * → durable record, with full traceability (canonical correlation ids).
  */
 
-import type { Core } from '../core/core.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
 import type { SalesSchema } from '../config/schema.ts';
 import type { PreCallContext } from '../domain/context.ts';
 import type { DealState, Gap } from '../domain/deal.ts';
@@ -42,7 +43,7 @@ export interface LiveUpdate {
 }
 
 export interface BeginOptions {
-  core: Core;
+  exec: AiExecutor;
   schema: SalesSchema;
   context: ContextInput;
 }
@@ -50,7 +51,7 @@ export interface BeginOptions {
 const STAGE_WINDOW = 5;
 
 export class LiveCopilot {
-  readonly core: Core;
+  readonly exec: AiExecutor;
   readonly schema: SalesSchema;
   readonly context: PreCallContext;
   private state: DealState;
@@ -61,17 +62,17 @@ export class LiveCopilot {
   private readonly lineage: LineageRecord[] = [];
   private readonly pending: LineageRecord[] = [];
 
-  private constructor(core: Core, schema: SalesSchema, context: PreCallContext, state: DealState) {
-    this.core = core;
+  private constructor(exec: AiExecutor, schema: SalesSchema, context: PreCallContext, state: DealState) {
+    this.exec = exec;
     this.schema = schema;
     this.context = context;
     this.state = state;
   }
 
   static async begin(opts: BeginOptions): Promise<LiveCopilot> {
-    const context = await assembleContext(opts.core, opts.context);
-    const state = initialState(opts.core.callId, opts.schema, context);
-    return new LiveCopilot(opts.core, opts.schema, context, state);
+    const context = await assembleContext(opts.exec, opts.context);
+    const state = initialState(opts.exec.callId, opts.schema, context);
+    return new LiveCopilot(opts.exec, opts.schema, context, state);
   }
 
   /** Ingest one conversation turn and return the refreshed live guidance. */
@@ -82,12 +83,12 @@ export class LiveCopilot {
     const newTurns = [turn];
     const window = this.transcript.slice(-STAGE_WINDOW);
 
-    // Independent interpretation steps run concurrently; all governed by Core.
+    // Independent interpretation steps run concurrently; all governed by @aion/core.
     const [extraction, stage, signals, objections] = await Promise.all([
-      this.core.run(extractionTask({ turns: newTurns, factSlots: this.schema.factSlots, existing: this.state.facts, turnIndex: turn.index })),
-      this.core.run(stageTask({ turns: window, priorStage: this.state.conversationStage, hasOpenObjection: this.state.objections.some((o) => o.status !== 'resolved'), turnIndex: turn.index })),
-      this.core.run(signalsTask({ turns: newTurns, turnIndex: turn.index })),
-      this.core.run(objectionTask({ turns: newTurns, existing: this.state.objections, playbook: this.schema.objectionPlaybook, turnIndex: turn.index })),
+      this.exec.run(extractionTask({ turns: newTurns, factSlots: this.schema.factSlots, existing: this.state.facts, turnIndex: turn.index })),
+      this.exec.run(stageTask({ turns: window, priorStage: this.state.conversationStage, hasOpenObjection: this.state.objections.some((o) => o.status !== 'resolved'), turnIndex: turn.index })),
+      this.exec.run(signalsTask({ turns: newTurns, turnIndex: turn.index })),
+      this.exec.run(objectionTask({ turns: newTurns, existing: this.state.objections, playbook: this.schema.objectionPlaybook, turnIndex: turn.index })),
     ]);
 
     // Merge interpretation into the live state.
@@ -116,12 +117,12 @@ export class LiveCopilot {
     if (turn.speaker === 'prospect') this.attributeLineage(turn);
 
     // Next-best-action.
-    const nba = await this.core.run(nbaTask({ state: this.state, gaps: this.state.gaps, schema: this.schema, context: this.context, turnIndex: turn.index }));
+    const nba = await this.exec.run(nbaTask({ state: this.state, gaps: this.state.gaps, schema: this.schema, context: this.context, turnIndex: turn.index }));
     for (const rec of nba.output) {
       this.surfaced.push(rec);
       const record: LineageRecord = {
         recommendationId: rec.id,
-        traceId: nba.traceId,
+        traceId: nba.correlationId,
         surfacedAtTurn: turn.index,
         recommendationType: rec.type,
         recommendationTitle: rec.title,

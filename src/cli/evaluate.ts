@@ -7,7 +7,7 @@
  */
 
 import { runEval } from '../eval/evaluate.ts';
-import { detectProvider } from '../core/llm.ts';
+import { detectProvider } from '../platform/provider-adapter.ts';
 import { h1 } from './format.ts';
 
 const GATES = {

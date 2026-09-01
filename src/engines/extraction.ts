@@ -1,13 +1,13 @@
 /**
  * Information Extraction engine (Live responsibility #1).
  *
- * Turns unstructured conversation into structured fact slots. Runs through the
- * Core so both the LLM path and the deterministic heuristic path are governed
- * and traced, and so their output shape is identical.
+ * Turns unstructured conversation into structured fact slots. Submitted through
+ * the AiExecutionService → @aion/core, so both the LLM path and the
+ * deterministic heuristic path are governed and traced identically.
  */
 
-import type { Core } from '../core/core.ts';
-import type { AiTask } from '../core/task.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { Turn } from '../domain/types.ts';
 import type { FactKey, FactMap, FactSlot } from '../domain/facts.ts';
 import { FACT_LABELS } from '../domain/facts.ts';
@@ -231,8 +231,8 @@ export function extractionTask(input: ExtractionInput): AiTask<ExtractionInput, 
   };
 }
 
-export async function runExtraction(core: Core, input: ExtractionInput): Promise<FactUpdate[]> {
-  const { output } = await core.run(extractionTask(input));
+export async function runExtraction(exec: AiExecutor, input: ExtractionInput): Promise<FactUpdate[]> {
+  const { output } = await exec.run(extractionTask(input));
   return output;
 }
 

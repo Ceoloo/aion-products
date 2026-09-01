@@ -8,10 +8,11 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "setup:core": "bash scripts/setup-core.sh",
     "typecheck": "tsc --noEmit",
     "test": "node --test",
     "demo": "node src/cli/demo.ts",
-    "demo:contractor": "node src/cli/demo.ts --fixture contractor-audit-call",
+    "demo:contractor": "node src/cli/demo.ts --fixture contractor-estimate-call",
     "demo:funding": "node src/cli/demo.ts --fixture funding-discovery-call",
     "eval": "node src/cli/evaluate.ts"
   },
@@ -24,6 +25,9 @@
   ],
   "author": "AION",
   "license": "UNLICENSED",
+  "dependencies": {
+    "@aion/core": "file:.vendor/aion-core"
+  },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.122.0"
   },

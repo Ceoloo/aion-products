@@ -98,8 +98,9 @@ export function report(r: CallIntelligence): string {
     lines.push(`      • "${rec.recommendationTitle}" (turn ${rec.surfacedAtTurn}) → prospect@${rec.prospectResponseTurn}, order ${rec.stateBefore.ladderOrder}→${rec.ladderOrderAfter}${rec.followedByRep ? ' [followed]' : ''}`);
   }
 
-  lines.push('\n  TRACE');
-  lines.push(`    AI executions : ${r.trace.total}  providers=${JSON.stringify(r.trace.byProvider)}  fallbacks=${r.trace.fallbacks}  avg=${r.trace.avgLatencyMs}ms`);
+  lines.push('\n  TRACE (via @aion/core)');
+  lines.push(`    AI executions : ${r.trace.total}  byModel=${JSON.stringify(r.trace.byModel)}  fallbacks=${r.trace.fallbacks}  avg=${r.trace.avgLatencyMs}ms`);
+  lines.push(`    Canonical     : ${r.trace.telemetryRows} telemetry rows, ${r.trace.correlationIds} correlation id(s)`);
 
   return lines.join('\n');
 }

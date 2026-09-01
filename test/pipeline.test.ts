@@ -12,7 +12,7 @@ import { ThrowingLlm } from '../src/testing/fakes.ts';
 
 async function runFixture(id: string, llm: any) {
   const fixture = getFixture(id);
-  const { copilot, core } = await createCopilot({ callId: `t_${id}`, industry: fixture.industry, context: fixture.context, llm });
+  const { copilot, exec } = await createCopilot({ callId: `t_${id}`, industry: fixture.industry, context: fixture.context, llm });
   const updates = [];
   for (const turn of fixture.turns) {
     const u = await copilot.ingest(turn);
@@ -22,8 +22,8 @@ async function runFixture(id: string, llm: any) {
     }
     updates.push(u);
   }
-  const report = buildReport(copilot, core, getSchema(fixture.industry));
-  return { copilot, core, updates, report };
+  const report = buildReport(copilot, exec, getSchema(fixture.industry));
+  return { copilot, exec, updates, report };
 }
 
 test('signature move: a pricing objection before urgency/impact yields a "return to impact" recommendation', async () => {
@@ -64,11 +64,15 @@ test('CRM-write governance surfaces only explicit, high-confidence facts', async
 });
 
 test('resilience: with a failing LLM the loop still produces state via governed fallback', async () => {
-  const { report, core } = await runFixture('funding-discovery-call', new ThrowingLlm());
+  const { report, exec } = await runFixture('funding-discovery-call', new ThrowingLlm());
   assert.ok(report.outcome.advanced, 'still advanced on deterministic fallback');
-  const traces = core.tracer.all();
-  assert.ok(traces.length > 0);
-  assert.ok(traces.every((t) => t.provider === 'deterministic' && t.fellBack), 'every execution fell back and was traced');
+  const summary = exec.traceSummary();
+  assert.ok(summary.total > 0);
+  assert.equal(summary.fallbacks, summary.total, 'every AI execution fell back');
+  // Fallbacks are still governed successes in the canonical control plane.
+  const telemetry = exec.controlPlane.telemetrySink.all();
+  const execRows = telemetry.filter((t) => t.operation === 'execution');
+  assert.ok(execRows.length > 0 && execRows.every((t) => t.status === 'ok'), 'traced as governed successes');
 });
 
 test('industry configurability: the same engines drive a different ladder for contractors', async () => {

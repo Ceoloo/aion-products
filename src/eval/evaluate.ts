@@ -14,7 +14,7 @@
  */
 
 import type { CallFixture } from '../../fixtures/types.ts';
-import type { LlmProvider } from '../core/llm.ts';
+import type { LlmProvider } from '../platform/provider-adapter.ts';
 import { createCopilot, buildReport } from '../aion.ts';
 import { getSchema } from '../config/registry.ts';
 import { FIXTURES } from '../../fixtures/index.ts';
@@ -74,7 +74,7 @@ export interface EvalOptions {
 
 async function evalFixture(fixture: CallFixture, opts: EvalOptions): Promise<FixtureEval> {
   const schema = getSchema(fixture.industry);
-  const { copilot, core } = await createCopilot({
+  const { copilot, exec } = await createCopilot({
     callId: `eval_${fixture.id}`,
     industry: fixture.industry,
     context: fixture.context,
@@ -89,7 +89,7 @@ async function evalFixture(fixture: CallFixture, opts: EvalOptions): Promise<Fix
     }
   }
 
-  const report = buildReport(copilot, core, schema);
+  const report = buildReport(copilot, exec, schema);
   const state = report.finalState;
 
   // Extraction accuracy on clearly-stated facts.

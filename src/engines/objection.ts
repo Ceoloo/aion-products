@@ -7,8 +7,8 @@
  * to very different concerns, which is why interpretation matters.
  */
 
-import type { Core } from '../core/core.ts';
-import type { AiTask } from '../core/task.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { Turn } from '../domain/types.ts';
 import type { Objection, ObjectionCategory } from '../domain/deal.ts';
 import type { ObjectionPlaybookEntry } from '../config/schema.ts';
@@ -130,7 +130,7 @@ export function objectionTask(input: ObjectionInput): AiTask<ObjectionInput, Obj
   };
 }
 
-export async function runObjections(core: Core, input: ObjectionInput): Promise<Objection[]> {
-  const { output } = await core.run(objectionTask(input));
+export async function runObjections(exec: AiExecutor, input: ObjectionInput): Promise<Objection[]> {
+  const { output } = await exec.run(objectionTask(input));
   return output;
 }

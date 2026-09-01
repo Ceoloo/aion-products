@@ -8,8 +8,8 @@
  * defending price.
  */
 
-import type { Core } from '../core/core.ts';
-import type { AiTask } from '../core/task.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { DealState, Gap } from '../domain/deal.ts';
 import type { PreCallContext } from '../domain/context.ts';
 import type { SalesSchema } from '../config/schema.ts';
@@ -219,7 +219,7 @@ export function nbaTask(input: NbaInput): AiTask<NbaInput, Recommendation[]> {
   };
 }
 
-export async function runNba(core: Core, input: NbaInput): Promise<Recommendation[]> {
-  const { output } = await core.run(nbaTask(input));
+export async function runNba(exec: AiExecutor, input: NbaInput): Promise<Recommendation[]> {
+  const { output } = await exec.run(nbaTask(input));
   return output;
 }

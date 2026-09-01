@@ -4,8 +4,8 @@
  * not slot values, and feed readiness + next-best-action differently.
  */
 
-import type { Core } from '../core/core.ts';
-import type { AiTask } from '../core/task.ts';
+import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { Turn } from '../domain/types.ts';
 import type { BuyingSignal, Commitment } from '../domain/deal.ts';
 import { clampConfidence } from '../domain/types.ts';
@@ -92,7 +92,7 @@ export function signalsTask(input: SignalsInput): AiTask<SignalsInput, SignalsRe
   };
 }
 
-export async function runSignals(core: Core, input: SignalsInput): Promise<SignalsResult> {
-  const { output } = await core.run(signalsTask(input));
+export async function runSignals(exec: AiExecutor, input: SignalsInput): Promise<SignalsResult> {
+  const { output } = await exec.run(signalsTask(input));
   return output;
 }

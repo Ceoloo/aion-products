@@ -60,12 +60,14 @@ Six real-time responsibilities, each an engine governed by the Core:
 
 ## Run it
 
-No build step, no API key required. The whole loop runs deterministically
-offline; set `ANTHROPIC_API_KEY` to route the AI steps through Claude (governed
-by the Core, with automatic deterministic fallback).
+No build step, no API key required. Every AI step is governed by the canonical
+`@aion/core` control plane; the loop runs deterministically offline, and setting
+`ANTHROPIC_API_KEY` routes the model calls through Claude (with automatic,
+still-governed deterministic fallback).
 
 ```bash
-npm install
+npm run setup:core           # clone + build @aion/core (pinned) into .vendor/ (once)
+npm install                  # or: npm ci
 npm run demo                 # replay a call, see live guidance + post-call report
 npm run demo:contractor      # a different industry / ladder
 npm run eval                 # Mission-001 gate scorecard over the fixture set
@@ -73,7 +75,10 @@ npm test                     # unit + integration + gate tests
 npm run typecheck
 ```
 
-Requires Node ≥ 22.18 (uses native TypeScript type-stripping — `.ts` runs directly).
+Requires Node ≥ 22.18 (native TypeScript type-stripping — `.ts` runs directly).
+`@aion/core` is a separate repo in the six-repo constitution and is consumed as
+a built `file:` dependency; `npm run setup:core` bootstraps it (see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → "Consuming @aion/core").
 
 Point the demo at any labeled fixture:
 
@@ -87,7 +92,7 @@ node src/cli/demo.ts --fixture aion-b2b-discovery-call --quiet
 ```ts
 import { createCopilot, buildReport, getSchema } from './src/aion.ts';
 
-const { copilot, core } = await createCopilot({
+const { copilot, exec } = await createCopilot({
   callId, industry: 'funding', context, // ContextInput: prospect/company/offer/CRM/priors
 });
 
@@ -97,14 +102,17 @@ for (const turn of turns) {
   copilot.recordFeedback(recId, 'acted_on', turn.index); // the rep-value loop
 }
 
-const report = buildReport(copilot, core, getSchema('funding')); // durable CallIntelligence
+const report = buildReport(copilot, exec, getSchema('funding')); // durable CallIntelligence
 ```
 
 ## Layout
 
 ```
 src/
-  core/        AION Core: governance policy, model providers, tracing/lineage
+  platform/    product AI layer → canonical @aion/core:
+                 revenue-ai-tasks (task defs + capability map),
+                 ai-execution (AiExecutionService: submits governed Commands),
+                 provider-adapter (RevenueExecutionAdapter + LLM providers)
   domain/      ladder, facts, deal state, objections, recommendations, lineage, report
   config/      SalesSchema + industry configs (funding, aion-b2b, contractor)
   engines/     context · extraction · stage · signals · objection · gaps · readiness · nba · ladder
@@ -112,9 +120,14 @@ src/
   eval/        evaluation harness that scores the Mission-001 gates
   cli/         demo + evaluate runners
 fixtures/      labeled transcripts (synthetic evaluation set)
+scripts/       setup-core.sh (bootstraps @aion/core)
 test/          node:test suites
 docs/          MISSION-001, ARCHITECTURE, GATES
 ```
+
+Governance, policy, risk routing, run state, and the execution contract live in
+`@aion/core`, not here. This repo owns AI task definitions and sales
+interpretation, and consumes the Core contracts.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and
 [`docs/GATES.md`](docs/GATES.md) for how the mission gates are measured and what

@@ -6,8 +6,28 @@
 import type { DealState, Objection, BuyingSignal, Commitment } from './deal.ts';
 import type { FactMap } from './facts.ts';
 import type { LineageRecord } from './lineage.ts';
-import type { TraceSummary } from '../core/trace.ts';
 import type { RepFeedback } from './recommendation.ts';
+
+/**
+ * Summary of AI execution for one call — a read-model over the canonical
+ * @aion/core trace (telemetry + correlation ids) plus the product's execution
+ * log. @aion/core remains the trace authority.
+ */
+export interface TraceSummary {
+  /** product AI-task executions (== canonical runs submitted). */
+  total: number;
+  /** canonical @aion/core telemetry rows recorded for this call. */
+  telemetryRows: number;
+  /** telemetry rows for the execution step specifically. */
+  executionRows: number;
+  /** execution count by reported model ("deterministic" when no model ran). */
+  byModel: Record<string, number>;
+  /** executions that fell back to the deterministic path. */
+  fallbacks: number;
+  avgLatencyMs: number;
+  /** distinct canonical correlation ids (one per governed run). */
+  correlationIds: number;
+}
 
 export interface CallOutcome {
   stageBeforeId: string;
