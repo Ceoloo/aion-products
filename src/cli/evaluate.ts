@@ -61,6 +61,10 @@ async function main(): Promise<void> {
   console.log(`\n  OVERALL: ${allPass ? 'ALL GATES PASS ✅' : 'SOME GATES NOT MET ❌'}`);
   console.log('\n  Note: production validation requires ≥25 real sales conversations (docs/GATES.md).');
   console.log('  The fixture set is a synthetic offline harness proving the loop and gate instrumentation.');
+  console.log('  Green here is a SYNTHETIC engineering gate, NOT real-world validation.');
+
+  // Make this a real CI gate.
+  if (!allPass) process.exitCode = 1;
 }
 
 main().catch((e) => {
