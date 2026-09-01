@@ -11,6 +11,7 @@
     "setup:core": "bash scripts/setup-core.sh",
     "typecheck": "tsc --noEmit",
     "test": "node --test",
+    "console": "node src/server/app.ts",
     "demo": "node src/cli/demo.ts",
     "demo:contractor": "node src/cli/demo.ts --fixture contractor-estimate-call",
     "demo:funding": "node src/cli/demo.ts --fixture funding-discovery-call",

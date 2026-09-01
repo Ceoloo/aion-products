@@ -68,12 +68,20 @@ still-governed deterministic fallback).
 ```bash
 npm run setup:core           # clone + build @aion/core (pinned) into .vendor/ (once)
 npm install                  # or: npm ci
-npm run demo                 # replay a call, see live guidance + post-call report
+npm run console              # Validation Console → http://localhost:4173 (real calls)
+npm run demo                 # replay a fixture call, see live guidance + post-call report
 npm run demo:contractor      # a different industry / ladder
-npm run eval                 # Mission-001 gate scorecard over the fixture set
+npm run eval                 # SYNTHETIC gate scorecard over the fixture set
 npm test                     # unit + integration + gate tests
 npm run typecheck
 ```
+
+**Validation Console** (`npm run console`) is the operator surface for running
+the copilot on **real calls**: enter prospect/context, paste a transcript (or
+use the live mic), watch the live guidance, then correct the AI in a 30–60s
+form. Those corrections are the ground truth; the Dashboard tab scores the real
+Mission-001 gates. See [`docs/VALIDATION.md`](docs/VALIDATION.md). Real records
+are PII and persist to a git-ignored `data/` dir.
 
 Requires Node ≥ 22.18 (native TypeScript type-stripping — `.ts` runs directly).
 `@aion/core` is a separate repo in the six-repo constitution and is consumed as

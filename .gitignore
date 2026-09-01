@@ -10,3 +10,6 @@ coverage/
 
 # Vendored, built @aion/core (bootstrapped via scripts/setup-core.sh)
 .vendor/
+
+# Real call session records (PII) — never commit
+data/
