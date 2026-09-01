@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    name: typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Native TypeScript type-stripping requires Node >= 22.18.
+          node-version: '22.x'
+      - run: node --version
+      # Bootstrap the canonical @aion/core control-plane kernel (clone + build a
+      # pinned commit into .vendor/aion-core) so the file: dependency resolves.
+      - name: bootstrap @aion/core
+        run: npm run setup:core
+      - run: npm ci
+      - name: typecheck
+        run: npm run typecheck
+      - name: unit + integration tests
+        run: npm test
+
+  synthetic-mission-eval:
+    # Named to make it impossible to mistake a green run for production
+    # validation. This exercises the Mission-001 gates against SYNTHETIC
+    # fixtures only. Real validation requires >=25 real sales conversations
+    # (see docs/GATES.md).
+    name: synthetic mission eval (NOT production validation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: bootstrap @aion/core
+        run: npm run setup:core
+      - run: npm ci
+      - name: run synthetic Mission-001 gate scorecard
+        run: npm run eval

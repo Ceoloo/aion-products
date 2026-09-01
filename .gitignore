@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.env
+.env.*
+dist/
+coverage/
+.DS_Store
+/tmp/
+*.tsbuildinfo
+
+# Vendored, built @aion/core (bootstrapped via scripts/setup-core.sh)
+.vendor/
