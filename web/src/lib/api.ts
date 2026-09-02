@@ -3,21 +3,36 @@
 // the x-aion-token header — never as a query parameter.
 
 /**
- * Read the console token from the URL fragment (preferred — `#token=…` is not
- * sent in the HTTP request line, so it stays out of server/proxy logs) or a
- * legacy `?token=` query, then strip it from the URL so the secret does not
- * linger in history, bookmarks, or copied links.
+ * Read the console token from the URL fragment ONLY (`#token=…`) — a fragment is
+ * not sent in the HTTP request line, so it stays out of server/proxy logs. A
+ * `?token=` query is deliberately NOT honored as a credential (it would already
+ * be in the request line before we could strip it); it's only scrubbed from the
+ * address bar for hygiene. The fragment value is decoded with
+ * `decodeURIComponent` (not `URLSearchParams`, which would turn a literal `+`
+ * into a space and corrupt tokens containing `+`). The token is then stripped
+ * from the URL so it doesn't linger in history, bookmarks, or copied links.
  */
 function readToken(): string {
   try {
-    const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const rawHash = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash;
+    let token = '';
+    const keptHashParts: string[] = [];
+    for (const part of rawHash.split('&')) {
+      if (!part) continue;
+      const eq = part.indexOf('=');
+      const key = eq >= 0 ? part.slice(0, eq) : part;
+      if (key === 'token') {
+        token = decodeURIComponent(eq >= 0 ? part.slice(eq + 1) : '');
+      } else {
+        keptHashParts.push(part);
+      }
+    }
     const query = new URLSearchParams(location.search);
-    const token = hash.get('token') || query.get('token') || '';
-    if (hash.has('token') || query.has('token')) {
-      hash.delete('token');
-      query.delete('token');
-      const h = hash.toString();
+    const hadToken = token !== '' || rawHash.includes('token=') || query.has('token');
+    if (hadToken) {
+      query.delete('token'); // scrub a legacy ?token= from the bar (not used as a credential)
       const q = query.toString();
+      const h = keptHashParts.join('&');
       history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + (h ? `#${h}` : ''));
     }
     return token;
