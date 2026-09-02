@@ -2,28 +2,30 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1216" />
 <title>AION Validation Console</title>
 <style>
-  :root { --bg:#0f1216; --panel:#171b22; --panel2:#1e242d; --line:#2a323d; --fg:#e6edf3; --muted:#9aa7b4; --accent:#4c8dff; --ok:#3fb950; --warn:#d29922; --bad:#f85149; }
-  * { box-sizing:border-box; }
+  :root { --bg:#0f1216; --panel:#171b22; --panel2:#1e242d; --line:#2a323d; --fg:#e6edf3; --muted:#9aa7b4; --accent:#4c8dff; --ok:#3fb950; --warn:#d29922; --bad:#f85149; --safe-b:env(safe-area-inset-bottom,0px); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
   header { display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:5; }
   header h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.02em; }
   header .path { color:var(--muted); font-size:12px; }
-  nav { margin-left:auto; display:flex; gap:8px; }
-  nav button { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
-  nav button.active { border-color:var(--accent); color:var(--accent); }
+  nav.top { margin-left:auto; display:flex; gap:8px; }
+  nav.top button { background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
+  nav.top button.active { border-color:var(--accent); color:var(--accent); }
   main { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:16px 20px; max-width:1400px; }
   @media (max-width:1000px){ main { grid-template-columns:1fr; } }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
   .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 12px; }
   label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
-  input, select, textarea { width:100%; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:7px 9px; font:inherit; }
+  input, select, textarea { width:100%; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px 10px; font:inherit; }
   textarea { resize:vertical; min-height:70px; }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  button.primary { background:var(--accent); color:#fff; border:none; border-radius:7px; padding:9px 16px; cursor:pointer; font-weight:600; margin-top:12px; }
-  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border:none; border-radius:7px; padding:10px 16px; font-weight:600; margin-top:12px; }
+  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:7px 11px; }
   .hidden { display:none !important; }
   .kv { display:flex; justify-content:space-between; gap:12px; padding:4px 0; border-bottom:1px dotted var(--line); }
   .sig { display:flex; align-items:center; gap:8px; padding:3px 0; }
@@ -33,11 +35,12 @@
   .turn { margin:0 0 6px; } .turn b { color:var(--accent); } .turn.prospect b { color:#c9a227; }
   .rec { background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:10px; margin:8px 0; }
   .rec .t { font-weight:600; } .rec .r { color:var(--muted); font-size:12.5px; margin:3px 0; } .rec .u { color:var(--fg); font-style:italic; }
-  .rec .fb { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
-  .rec .fb button { font-size:12px; padding:4px 8px; }
+  .rec .fb { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .rec .fb button { font-size:12px; padding:6px 10px; }
   .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid var(--line); }
   table { width:100%; border-collapse:collapse; font-size:12.5px; }
   th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  .tablewrap { overflow-x:auto; }
   .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
   .metric { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px; }
   .metric .big { font-size:22px; font-weight:700; } .metric .lab { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
@@ -45,27 +48,74 @@
   .banner { background:var(--panel2); border:1px solid var(--warn); color:var(--warn); border-radius:8px; padding:8px 12px; font-size:12.5px; margin-bottom:12px; }
   fieldset { border:1px solid var(--line); border-radius:8px; margin:10px 0; padding:10px; }
   legend { color:var(--muted); font-size:12px; padding:0 6px; }
-  .verdict { display:flex; gap:6px; align-items:center; margin:4px 0; flex-wrap:wrap; }
-  .verdict .name { width:130px; } .verdict .ai { color:var(--muted); font-size:12px; flex:1; }
-  .seg button { font-size:12px; padding:3px 8px; }
+  .verdict { display:flex; gap:6px; align-items:center; margin:6px 0; flex-wrap:wrap; }
+  .verdict .name { width:130px; font-weight:600; } .verdict .ai { color:var(--muted); font-size:12px; flex:1; min-width:120px; }
+  .seg { display:inline-flex; gap:6px; flex-wrap:wrap; }
+  .seg button { font-size:12px; padding:6px 10px; }
   .seg button.sel { background:var(--accent); color:#fff; border-color:var(--accent); }
+  /* chips row for the live metrics */
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font-size:12px; }
+  .chip b { display:block; font-size:14px; }
+  /* mobile-only surfaces (hidden on desktop) */
+  .mobilebar, .livebar { display:none; }
+
+  /* ===================== HANDHELD (≤1000px) ===================== */
+  @media (max-width:1000px){
+    header { padding:10px 14px; }
+    header .path { display:none; }
+    nav.top { display:none; }
+    input, select, textarea { font-size:16px; padding:11px 12px; } /* 16px avoids iOS zoom */
+    button.ghost { padding:9px 12px; }
+    main { padding:12px 14px calc(120px + var(--safe-b)); gap:12px; }
+
+    /* one phase at a time; guidance (panel) floats to the top of the live phase */
+    #view-call { display:flex; flex-direction:column; }
+    #view-call > section { display:contents; }
+    #setup{order:0} #panel{order:1} #ingest{order:2} #validate{order:3}
+
+    #view-call [data-phase]{ display:none !important; }
+    body[data-phase="setup"]    #view-call [data-phase="setup"]:not(.hidden),
+    body[data-phase="live"]     #view-call [data-phase="live"]:not(.hidden),
+    body[data-phase="validate"] #view-call [data-phase="validate"]:not(.hidden){ display:block !important; }
+
+    .metrics { grid-template-columns:repeat(2,1fr); }
+    .verdict .name{ width:100%; }
+    .desktop-only{ display:none !important; }
+
+    /* sticky live input bar — thumb reach */
+    .livebar { position:fixed; left:0; right:0; bottom:calc(56px + var(--safe-b)); z-index:6;
+      display:none; gap:6px; align-items:center; padding:8px 10px; background:var(--panel); border-top:1px solid var(--line); }
+    body[data-phase="live"] .livebar { display:flex; }
+    .livebar input { flex:1; }
+    .livebar button { padding:11px 12px; }
+    .livebar .segs button.sel { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+    /* bottom navigation */
+    .mobilebar { position:fixed; left:0; right:0; bottom:0; z-index:7; display:flex;
+      background:var(--panel); border-top:1px solid var(--line); padding-bottom:var(--safe-b); }
+    .mobilebar button { flex:1; background:transparent; border:none; color:var(--muted); font-size:11px;
+      padding:9px 4px; display:flex; flex-direction:column; align-items:center; gap:3px; }
+    .mobilebar button .ic { font-size:18px; line-height:1; }
+    .mobilebar button.on { color:var(--accent); }
+  }
+  @media (min-width:1001px){ #view-dash { display:block; } }
 </style>
 </head>
-<body>
+<body data-phase="setup">
 <header>
   <h1>AION · Validation Console</h1>
   <span class="path">MISSION-001 · first real customer conversations</span>
-  <nav>
-    <button id="tab-call" class="active" onclick="showTab('call')">Call</button>
-    <button id="tab-dash" onclick="showTab('dash')">Dashboard</button>
+  <nav class="top">
+    <button id="tab-call" class="active" onclick="navTo('setup')">Call</button>
+    <button id="tab-dash" onclick="navTo('dash')">Dashboard</button>
   </nav>
 </header>
 
-<!-- CALL TAB -->
+<!-- CALL VIEW -->
 <main id="view-call">
-  <!-- setup + live -->
   <section>
-    <div class="card" id="setup">
+    <div class="card" id="setup" data-phase="setup">
       <h2>New call session</h2>
       <label>Industry / schema</label>
       <select id="industry"></select>
@@ -84,15 +134,18 @@
       <label>Offer summary</label><input id="offerSummary" placeholder="Revenue-based working capital" />
       <label>Prior objections (one per line)</label><textarea id="priorObjections"></textarea>
       <label>Outstanding questions (one per line)</label><textarea id="outstandingQuestions"></textarea>
-      <button class="primary" onclick="startSession()">Start Session</button>
+      <button class="primary" style="width:100%" onclick="startSession()">Start Session</button>
     </div>
 
-    <div class="card hidden" id="ingest">
+    <div class="card hidden" id="ingest" data-phase="live">
       <h2>Transcript ingestion</h2>
-      <label>Paste transcript (prefix lines with <code>Rep:</code> / <code>Prospect:</code>)</label>
-      <textarea id="paste" style="min-height:120px" placeholder="Rep: Hi Marcus, quick minute?&#10;Prospect: Sure, what's this about?"></textarea>
-      <button class="primary" onclick="ingestPaste()">Ingest transcript</button>
-      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+      <details id="pasteWrap">
+        <summary style="cursor:pointer;color:var(--muted);font-size:12px;margin-bottom:6px">Paste a transcript</summary>
+        <label>Prefix lines with <code>Rep:</code> / <code>Prospect:</code></label>
+        <textarea id="paste" style="min-height:110px" placeholder="Rep: Hi Marcus, quick minute?&#10;Prospect: Sure, what's this about?"></textarea>
+        <button class="primary" onclick="ingestPaste()">Ingest transcript</button>
+      </details>
+      <div class="desktop-only" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
         <label>Add a single turn (live)</label>
         <div class="verdict">
           <span class="seg" id="turnSpeaker">
@@ -101,36 +154,34 @@
           </span>
           <input id="turnText" placeholder="what was just said…" onkeydown="if(event.key==='Enter')addTurn()" />
           <button class="ghost" onclick="addTurn()">Send</button>
-          <button class="ghost" id="micBtn" onclick="toggleMic()">🎤 Mic</button>
+          <button class="ghost micbtn" id="micBtn" onclick="toggleMic()">🎤 Mic</button>
         </div>
         <div class="muted" id="micNote" style="font-size:11px"></div>
       </div>
-      <button class="primary" style="background:var(--warn)" onclick="endCall()">End call → validate</button>
+      <button class="primary" style="background:var(--warn);width:100%" onclick="endCall()">End call → validate</button>
     </div>
   </section>
 
-  <!-- live copilot panel -->
   <section>
-    <div class="card hidden" id="panel">
+    <div class="card hidden" id="panel" data-phase="live">
       <h2>Live Copilot <span class="pill" id="aiPath"></span></h2>
       <div class="muted" id="briefing" style="font-size:12.5px;margin-bottom:10px"></div>
-      <div class="row">
-        <div class="kv"><span class="muted">Stage</span><b id="mStage">—</b></div>
-        <div class="kv"><span class="muted">Sentiment</span><b id="mSent">—</b></div>
-        <div class="kv"><span class="muted">Urgency</span><b id="mUrg">—</b></div>
-        <div class="kv"><span class="muted">Readiness</span><b id="mReady">—</b></div>
+      <div class="chips">
+        <div class="chip"><span class="muted">Stage</span><b id="mStage">—</b></div>
+        <div class="chip"><span class="muted">Sentiment</span><b id="mSent">—</b></div>
+        <div class="chip"><span class="muted">Urgency</span><b id="mUrg">—</b></div>
+        <div class="chip"><span class="muted">Readiness</span><b id="mReady">—</b></div>
       </div>
-      <div id="signals" style="margin:10px 0"></div>
+      <h2>Next move</h2>
+      <div id="recs"><span class="muted">Ingest turns to see guidance.</span></div>
+      <div id="signals" style="margin:12px 0"></div>
       <div id="objections"></div>
       <div id="gaps"></div>
-      <h2 style="margin-top:14px">Next move</h2>
-      <div id="recs"><span class="muted">Ingest turns to see guidance.</span></div>
       <h2 style="margin-top:14px">Transcript</h2>
       <div class="transcript" id="tr"></div>
     </div>
 
-    <!-- validation form -->
-    <div class="card hidden" id="validate">
+    <div class="card hidden" id="validate" data-phase="validate">
       <h2>Rep validation (ground truth)</h2>
       <div class="banner">Spend 30–60s correcting the AI. These corrections are the ground truth.</div>
       <div id="verdicts"></div>
@@ -194,13 +245,13 @@
       </div>
       <label><input type="checkbox" id="evaluable" style="width:auto" /> Evaluable conversation (counts toward the 25-gate)</label>
       <label>Notes</label><textarea id="notes"></textarea>
-      <button class="primary" onclick="finalize()">Save canonical record</button>
+      <button class="primary" style="width:100%" onclick="finalize()">Save canonical record</button>
       <div id="saved" class="muted" style="margin-top:8px"></div>
     </div>
   </section>
 </main>
 
-<!-- DASHBOARD TAB -->
+<!-- DASHBOARD VIEW -->
 <main id="view-dash" class="hidden" style="grid-template-columns:1fr">
   <div class="card">
     <h2>Validation dashboard <button class="ghost" style="float:right" onclick="loadDashboard()">Refresh</button></h2>
@@ -208,9 +259,28 @@
     <h2 style="margin-top:16px">Failure data (dispositions)</h2>
     <div id="disp" class="muted"></div>
     <h2 style="margin-top:16px">Sessions</h2>
-    <table id="recs-table"><thead><tr><th>When</th><th>Prospect</th><th>Industry</th><th>Kind</th><th>Disposition</th><th>Eval</th><th>Outcome</th><th>Adv</th><th>AI stage</th></tr></thead><tbody></tbody></table>
+    <div class="tablewrap"><table id="recs-table"><thead><tr><th>When</th><th>Prospect</th><th>Industry</th><th>Kind</th><th>Disposition</th><th>Eval</th><th>Outcome</th><th>Adv</th><th>AI stage</th></tr></thead><tbody></tbody></table></div>
   </div>
 </main>
+
+<!-- MOBILE: sticky live input bar -->
+<div class="livebar">
+  <button class="ghost micbtn" id="micBtnM" onclick="toggleMic()">🎤</button>
+  <span class="seg segs" id="turnSpeakerM">
+    <button data-s="prospect" class="ghost sel" onclick="pickSpeakerLive(this)">P</button>
+    <button data-s="rep" class="ghost" onclick="pickSpeakerLive(this)">R</button>
+  </span>
+  <input id="turnTextLive" placeholder="what was just said…" onkeydown="if(event.key==='Enter')addTurnLive()" />
+  <button class="primary" style="margin:0" onclick="addTurnLive()">Send</button>
+</div>
+
+<!-- MOBILE: bottom navigation -->
+<nav class="mobilebar">
+  <button data-p="setup" class="on" onclick="navTo('setup')"><span class="ic">📝</span>Setup</button>
+  <button data-p="live" onclick="navTo('live')"><span class="ic">🎧</span>Live</button>
+  <button data-p="validate" onclick="navTo('validate')"><span class="ic">✅</span>Validate</button>
+  <button data-p="dash" onclick="navTo('dash')"><span class="ic">📊</span>Dashboard</button>
+</nav>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -222,8 +292,30 @@ async function api(path, method='GET', body) {
   if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||('HTTP '+r.status)); }
   return r.json();
 }
-function showTab(t){ $('tab-call').classList.toggle('active',t==='call'); $('tab-dash').classList.toggle('active',t==='dash'); $('view-call').classList.toggle('hidden',t!=='call'); $('view-dash').classList.toggle('hidden',t!=='dash'); if(t==='dash') loadDashboard(); }
-function pickSpeaker(b){ document.querySelectorAll('#turnSpeaker button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); speaker=b.dataset.s; }
+
+// Unified navigation: drives desktop tabs AND mobile phases.
+function setPhase(p){
+  document.body.dataset.phase = p;
+  document.querySelectorAll('.mobilebar button').forEach(b=>b.classList.toggle('on', b.dataset.p===p));
+}
+function navTo(target){
+  if (target === 'dash'){ showTab('dash'); setPhase('dash'); return; }
+  showTab('call');
+  if (target === 'validate'){ if (SID) endCall(); else setPhase('validate'); return; }
+  setPhase(target);
+}
+function showTab(t){
+  const dash = t==='dash';
+  $('tab-call').classList.toggle('active',!dash); $('tab-dash').classList.toggle('active',dash);
+  $('view-call').classList.toggle('hidden',dash); $('view-dash').classList.toggle('hidden',!dash);
+  if (dash) loadDashboard();
+}
+function pickSpeaker(b){ document.querySelectorAll('#turnSpeaker button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); setSpeaker(b.dataset.s); }
+function pickSpeakerLive(b){ document.querySelectorAll('#turnSpeakerM button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); setSpeaker(b.dataset.s); }
+function setSpeaker(s){ speaker=s;
+  document.querySelectorAll('#turnSpeaker button').forEach(x=>x.classList.toggle('sel',x.dataset.s===s));
+  document.querySelectorAll('#turnSpeakerM button').forEach(x=>x.classList.toggle('sel',x.dataset.s===s));
+}
 function pick(group,b){ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); picks[group]=b.dataset.v; }
 
 async function loadSchemas(){
@@ -250,7 +342,7 @@ async function startSession(){
   $('setup').classList.add('hidden'); $('ingest').classList.remove('hidden'); $('panel').classList.remove('hidden');
   $('briefing').textContent = d.briefing || '';
   $('aiPath').textContent = d.aiPath==='claude'?'Claude · governed':'deterministic · governed';
-  render();
+  setPhase('live'); render();
 }
 
 async function ingestPaste(){
@@ -263,6 +355,11 @@ async function addTurn(){
   const d = await api(`/api/session/${SID}/ingest`,'POST',{speaker,text});
   $('turnText').value=''; afterIngest(d);
 }
+async function addTurnLive(){
+  const el=$('turnTextLive'); const text=el.value.trim(); if(!text||!SID) return;
+  const d = await api(`/api/session/${SID}/ingest`,'POST',{speaker,text});
+  el.value=''; afterIngest(d);
+}
 function afterIngest(d){ latestState=d.state; latestRecs=d.recommendations||[]; refreshTranscript(); render(); }
 
 async function refreshTranscript(){
@@ -272,7 +369,7 @@ function drawTranscript(){
   $('tr').innerHTML = transcript.map(t=>`<div class="turn ${t.speaker}"><b>${t.speaker}:</b> ${escapeHtml(t.text)}</div>`).join('');
   $('tr').scrollTop = $('tr').scrollHeight;
 }
-function escapeHtml(s){ return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 function sym(state){ return state==='confirmed'?['✓','ok']:state==='partial'?['~','warn']:state==='blocked'?['!','bad']:['✗','muted']; }
 function render(){
@@ -317,15 +414,16 @@ function endCall(){
       </span>
       <input id="c-${k}" class="hidden" placeholder="corrected value" style="flex-basis:100%" /></div>`;
   }).join('');
-  // suggest evaluable from transcript length
   const pt = transcript.filter(t=>t.speaker==='prospect'); const words = pt.reduce((n,t)=>n+t.text.split(/\s+/).length,0);
   $('evaluable').checked = pt.length>=2 && words>=40;
-  $('validate').classList.remove('hidden'); $('validate').scrollIntoView({behavior:'smooth'});
+  $('validate').classList.remove('hidden'); setPhase('validate');
+  $('validate').scrollIntoView({behavior:'smooth'});
 }
 const verdicts={};
 function pickV(k,b){ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); verdicts[k]=b.dataset.v; $('c-'+k).classList.toggle('hidden', b.dataset.v!=='edited'); }
 
 async function finalize(){
+  if(!SID){ return; }
   const fields={};
   for(const [k] of FIELDS){ if(verdicts[k]){ fields[k]={verdict:verdicts[k]}; const c=$('c-'+k).value.trim(); if(verdicts[k]==='edited'&&c) fields[k].corrected=c; } }
   const gt = {
@@ -334,11 +432,12 @@ async function finalize(){
     evaluable:$('evaluable').checked, stageAfterId:$('outcome').value, notes:$('notes').value,
   };
   const d = await api(`/api/session/${SID}/finalize`,'POST',{groundTruth:gt});
-  $('saved').innerHTML = `✅ Saved <b>${d.sessionId}</b> — kind: ${d.kind}, evaluable: ${d.evaluable}. <a href="#" onclick="resetCall();return false">New call</a> · <a href="#" onclick="showTab('dash');return false">Dashboard</a>`;
+  $('saved').innerHTML = `✅ Saved <b>${d.sessionId}</b> — kind: ${d.kind}, evaluable: ${d.evaluable}. <a href="#" onclick="resetCall();return false">New call</a> · <a href="#" onclick="navTo('dash');return false">Dashboard</a>`;
   $('ingest').classList.add('hidden');
+  SID=null;
 }
 function resetCall(){ SID=null; latestState=null; latestRecs=[]; transcript=[]; Object.keys(verdicts).forEach(k=>delete verdicts[k]); picks.guid=null; picks.adv='no';
-  $('setup').classList.remove('hidden'); $('ingest').classList.add('hidden'); $('panel').classList.add('hidden'); $('validate').classList.add('hidden'); $('saved').textContent=''; }
+  $('setup').classList.remove('hidden'); $('ingest').classList.add('hidden'); $('panel').classList.add('hidden'); $('validate').classList.add('hidden'); $('saved').textContent=''; setPhase('setup'); }
 
 async function loadDashboard(){
   const d = await api('/api/dashboard'); const m=d.metrics;
@@ -362,18 +461,22 @@ async function loadDashboard(){
     <td>${r.advanced?'▲':'—'}</td><td>${r.aiStage}</td></tr>`).join('');
 }
 
-// Optional live mic (Web Speech API, Chrome). Rep picks who is speaking.
+// Optional live mic (Web Speech API, Chrome/Android). Rep picks who is speaking.
 let rec=null, micOn=false;
+function setMicLabel(t){ document.querySelectorAll('.micbtn').forEach(b=>{ b.textContent = b.id==='micBtnM' ? (micOn?'⏹':'🎤') : t; }); }
 function toggleMic(){
   const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ $('micNote').textContent='Speech recognition not supported in this browser (use paste or single-turn).'; return; }
-  if(micOn){ rec && rec.stop(); micOn=false; $('micBtn').textContent='🎤 Mic'; return; }
+  if(!SR){ if($('micNote')) $('micNote').textContent='Speech recognition not supported here (use paste or single-turn).'; return; }
+  if(!SID){ return; }
+  if(micOn){ rec && rec.stop(); micOn=false; setMicLabel('🎤 Mic'); return; }
   rec = new SR(); rec.continuous=true; rec.interimResults=false; rec.lang='en-US';
   rec.onresult=(e)=>{ for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal){ const text=e.results[i][0].transcript.trim(); if(text){ api(`/api/session/${SID}/ingest`,'POST',{speaker,text}).then(afterIngest); } } } };
-  rec.onerror=(e)=>{ $('micNote').textContent='mic error: '+e.error; };
-  rec.start(); micOn=true; $('micBtn').textContent='🎤 Stop'; $('micNote').textContent='Listening — toggle Prospect/Rep before each speaker.';
+  rec.onerror=(e)=>{ if($('micNote')) $('micNote').textContent='mic error: '+e.error; };
+  rec.onend=()=>{ if(micOn){ try{rec.start();}catch(_){} } }; // keep listening
+  rec.start(); micOn=true; setMicLabel('⏹ Stop'); if($('micNote')) $('micNote').textContent='Listening — toggle Prospect/Rep before each speaker.';
 }
 
+setPhase('setup');
 loadSchemas();
 </script>
 </body>
