@@ -1,7 +1,32 @@
 // Thin client for the AION console API. Same-origin in production; the token
-// (if the server requires one) is read from the page URL and forwarded.
+// (if the server requires one) is read from the page URL and forwarded only in
+// the x-aion-token header — never as a query parameter.
 
-const TOKEN = new URLSearchParams(location.search).get('token') || '';
+/**
+ * Read the console token from the URL fragment (preferred — `#token=…` is not
+ * sent in the HTTP request line, so it stays out of server/proxy logs) or a
+ * legacy `?token=` query, then strip it from the URL so the secret does not
+ * linger in history, bookmarks, or copied links.
+ */
+function readToken(): string {
+  try {
+    const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const query = new URLSearchParams(location.search);
+    const token = hash.get('token') || query.get('token') || '';
+    if (hash.has('token') || query.has('token')) {
+      hash.delete('token');
+      query.delete('token');
+      const h = hash.toString();
+      const q = query.toString();
+      history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + (h ? `#${h}` : ''));
+    }
+    return token;
+  } catch {
+    return '';
+  }
+}
+
+const TOKEN = readToken();
 
 /** Same-origin JSON fetch helper: forwards the LAN token and throws on non-2xx. */
 async function api<T = any>(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T> {

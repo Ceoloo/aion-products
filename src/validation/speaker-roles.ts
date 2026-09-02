@@ -77,8 +77,15 @@ export interface RoleAssignment {
 export function assignRoles(utterances: RawUtterance[]): RoleAssignment {
   const channels = new Set(utterances.map((u) => (u.channel ?? '').trim()).filter(Boolean));
 
-  // Two-channel (diarized) path.
-  if (channels.size === 2) {
+  // Two-channel (diarized) path — only when EVERY utterance carries one of the
+  // two channels. A partially-diarized transcript (some lines unlabeled) would
+  // otherwise misattribute the unlabeled lines to `prospect`; fall through to
+  // content inference instead.
+  const fullyDiarized = channels.size === 2 && utterances.every((u) => {
+    const c = u.channel?.trim();
+    return !!c && channels.has(c);
+  });
+  if (fullyDiarized) {
     const [a, b] = [...channels];
     const agg: Record<string, number> = { [a!]: 0, [b!]: 0 };
     for (const u of utterances) if (u.channel) agg[u.channel.trim()] = (agg[u.channel.trim()] ?? 0) + roleLean(u.text);

@@ -13,7 +13,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 import { createCopilot, buildReport } from '../aion.ts';
 import { getSchema, listSchemas } from '../config/registry.ts';
@@ -263,8 +263,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     const body = await readBody(req);
 
     // Reject mutations while the session is being finalized so a late turn
-    // can't land after the canonical record was assembled.
-    if (s.finalizing && (action === 'ingest' || action === 'feedback')) {
+    // can't land after the canonical record was assembled — and so a second
+    // finalize can't race the first and overwrite its record with different
+    // ground truth. (The finalize handler clears `finalizing` on a persistence
+    // error, so a genuine retry is still possible.)
+    if (s.finalizing && (action === 'ingest' || action === 'feedback' || action === 'finalize')) {
       json(res, 409, { error: 'session is finalizing' });
       return;
     }
@@ -289,11 +292,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         turns = [{ index: s.turnIndex++, speaker, text: String(body.text) }];
       }
       let last = null;
+      let accepted = 0;
       for (const t of turns) {
-        if (t.text.trim()) last = await s.copilot.ingest(t);
+        if (t.text.trim()) { last = await s.copilot.ingest(t); accepted += 1; }
       }
       const state = s.copilot.currentState();
-      json(res, 200, { update: last, state, recommendations: last?.recommendations ?? [], ingested: turns.length, turns });
+      json(res, 200, { update: last, state, recommendations: last?.recommendations ?? [], ingested: accepted, turns });
       return;
     }
 
@@ -367,8 +371,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 function warnIfDataDirCommittable(): void {
   const resolved = resolve(DATA_DIR);
   const repo = resolve(process.cwd());
-  const rel = relative(repo, resolved);
-  const insideRepo = rel !== '' && !rel.startsWith('..') && !rel.startsWith('/');
+  // Treat the repo root itself as "inside" (AION_DATA_DIR=. resolves to repo,
+  // and JsonSessionStore would then write PII to <repo>/sessions).
+  const insideRepo = resolved === repo || resolved.startsWith(repo + sep);
   const isDefaultIgnored = resolved === resolve(repo, 'data');
   if (insideRepo && !isDefaultIgnored) {
     console.warn(`⚠ AION_DATA_DIR (${resolved}) is inside the repo but not the git-ignored 'data/' path — real PII records could be committed. Point it outside the repo.`);

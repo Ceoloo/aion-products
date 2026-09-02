@@ -5,12 +5,18 @@ on:
   push:
     branches: [main]
 
+# Least privilege: every job here only reads the repo (clone + build + test).
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: typecheck + tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           # Native TypeScript type-stripping requires Node >= 22.18.
@@ -31,6 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
@@ -53,6 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'

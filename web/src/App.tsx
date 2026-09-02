@@ -56,9 +56,23 @@ export default function App() {
     setState(d.state); setTranscript(d.transcript);
   };
 
+  // Serialize ingest requests: rapid mic finals must apply in order, so each
+  // enqueues after the previous settles. A failed turn toasts but doesn't break
+  // the chain, so later turns still process.
+  const ingestChain = useRef<Promise<void>>(Promise.resolve());
+
+  // Leaving an active session for Setup would orphan it server-side (it stays
+  // live, unfinalized) and start a second one. Confirm before abandoning it.
+  const navGuard = (target: Screen) => {
+    if (sessionId && target === 'setup' && screen !== 'setup') {
+      if (!window.confirm('Start a new call? The current session is still open and will be abandoned (not saved).')) return;
+    }
+    setScreen(target);
+  };
+
   return (
     <div className="min-h-full flex flex-col">
-      <Header screen={screen} onNav={setScreen} live={!!sessionId} />
+      <Header screen={screen} onNav={navGuard} live={!!sessionId} />
       {toast && (
         <div className="mx-auto mt-3 w-full max-w-6xl px-4">
           <div className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">{toast}</div>
@@ -82,9 +96,14 @@ export default function App() {
           <LiveView
             sessionId={sessionId} briefing={briefing} aiPath={aiPath}
             state={state} recs={recs} transcript={transcript} fb={fb}
-            onIngest={async (fn) => { try { const r = await fn(); setRecs(r.recommendations); await refresh(sessionId); } catch (e: any) { setToast(e.message); } }}
+            onIngest={(fn) => {
+              ingestChain.current = ingestChain.current.then(async () => {
+                try { const r = await fn(); setRecs(r.recommendations); await refresh(sessionId); }
+                catch (e: any) { setToast(e.message); }
+              });
+            }}
             onFeedback={async (id, f) => { setFb((m) => ({ ...m, [id]: f })); try { await AionApi.feedback(sessionId, id, f); } catch (e: any) { setToast(e.message); } }}
-            onEnd={() => setScreen('validate')}
+            onEnd={async () => { try { await refresh(sessionId); } catch (e: any) { setToast(e.message); } setScreen('validate'); }}
           />
         )}
         {screen === 'validate' && sessionId && state && (
@@ -98,7 +117,7 @@ export default function App() {
         )}
         {screen === 'dashboard' && <DashboardView onNewCall={() => setScreen('setup')} />}
       </main>
-      <MobileNav screen={screen} onNav={setScreen} live={!!sessionId} />
+      <MobileNav screen={screen} onNav={navGuard} live={!!sessionId} />
     </div>
   );
 }

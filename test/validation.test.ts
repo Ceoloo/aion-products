@@ -63,6 +63,19 @@ test('speaker roles: diarized channels are mapped to rep/lead', () => {
   assert.equal(bySpk.get(2), 'rep');
 });
 
+test('speaker roles: partial diarization falls back to content inference', () => {
+  // One utterance lacks a channel — the two-channel path must NOT claim it and
+  // silently label it prospect; fall back to content inference instead.
+  const r = assignRoles([
+    { channel: 'speaker 1', text: 'Hi, this is Dana from Keystone about working capital.' },
+    { text: 'We do about $85k a month and I own the business — what are the rates?' },
+    { channel: 'speaker 2', text: 'Before rates, what does missing those orders cost you?' },
+  ]);
+  assert.equal(r.method, 'content');
+  // The unlabeled line is lead content (asks about rates), not auto-prospect-by-channel.
+  assert.equal(r.turns[1]!.speaker, 'prospect');
+});
+
 test('speaker roles: explicit Rep:/Prospect: prefixes still win', () => {
   const turns = parseTranscript('Prospect: what are the rates?\nRep: let me explain how it works');
   assert.equal(turns[0]!.speaker, 'prospect');

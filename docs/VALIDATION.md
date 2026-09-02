@@ -23,9 +23,13 @@ prints a warning if a custom path resolves inside the repo).
 
 The server binds to `127.0.0.1` by default. For handheld/LAN use, set
 `AION_HOST=0.0.0.0` **and** `AION_TOKEN=<secret>`, then open
-`http://<lan-ip>:4173/?token=<secret>` on the phone — the API rejects requests
-without the token. Binding to a non-loopback host without a token prints a
-warning; prefer a trusted network or a tunnel.
+`http://<lan-ip>:4173/#token=<secret>` on the phone — the API rejects requests
+without the token. Pass the token in the URL **fragment** (`#token=…`), not the
+query string: a fragment is never sent in the HTTP request line, so it stays out
+of server/proxy logs, and the console strips it from the address bar on load so
+it doesn't linger in history or bookmarks. The token is then forwarded only in
+the `x-aion-token` header. Binding to a non-loopback host without a token prints
+a warning; prefer a trusted network or a tunnel.
 
 ## The loop
 
