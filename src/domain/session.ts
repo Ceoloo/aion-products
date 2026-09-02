@@ -67,6 +67,17 @@ export const GROUND_TRUTH_FIELDS: GroundTruthField[] = [
   'buying_signals',
 ];
 
+/**
+ * The subset of validated fields that are clearly-stated STRUCTURED FACTS. The
+ * Mission-001 ≥85% "fact extraction" gate is measured over these only —
+ * objection is an interpretation (scored by its own gate), and conversation
+ * stage / buying signals are interpretation, not structured facts.
+ */
+export const FACT_ACCURACY_FIELDS: GroundTruthField[] = ['pain', 'urgency', 'authority'];
+
+/** Interpretation fields — tracked separately, not part of the fact-accuracy gate. */
+export const INTERPRETATION_FIELDS: GroundTruthField[] = ['conversation_stage', 'buying_signals'];
+
 /** Overall usefulness of the live guidance, as judged by the rep. */
 export type GuidanceRating = 'useful' | 'acted_on' | 'ignored' | 'wrong' | 'mixed' | null;
 
@@ -171,6 +182,7 @@ export function suggestEvaluable(transcript: Turn[]): boolean {
   return words >= 40;
 }
 
+/** Suggest a session kind from the transcript and whether it is evaluable. */
 export function suggestKind(transcript: Turn[], evaluable: boolean): SessionKind {
   if (transcript.filter((t) => t.speaker === 'prospect').length === 0) return 'dial';
   if (!evaluable) return 'session';

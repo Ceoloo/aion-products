@@ -18,7 +18,7 @@ and measures what actually drives conversion.
 Not one terminal state. Revenue Copilot optimizes progression along a
 configurable **conversion ladder**:
 
-```
+```text
 CONTACT → ENGAGED → QUALIFIED → PAIN/NEED CONFIRMED → INTENT →
 NEXT STEP COMMITTED → APPLICATION/DEMO/APPOINTMENT/PROPOSAL → CLOSED → REVENUE
 ```
@@ -56,7 +56,7 @@ validation requires ≥25 real conversations as described there.
 
 ### Status
 
-```
+```text
 Architecture integration       ✅  canonical @aion/core is the governed chokepoint
 Synthetic engineering gates    ✅  npm run eval — all gates green in CI
 Canonical product on main      ✅  PR #1 merged

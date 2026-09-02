@@ -81,7 +81,9 @@ the copilot on **real calls**: enter prospect/context, paste a transcript (or
 use the live mic), watch the live guidance, then correct the AI in a 30–60s
 form. Those corrections are the ground truth; the Dashboard tab scores the real
 Mission-001 gates. See [`docs/VALIDATION.md`](docs/VALIDATION.md). Real records
-are PII and persist to a git-ignored `data/` dir.
+are PII and persist to the git-ignored `data/` dir (override `AION_DATA_DIR`
+only to a path **outside** the repo). The server binds to loopback by default;
+for phone/LAN use set `AION_HOST=0.0.0.0` **and** `AION_TOKEN=<secret>`.
 
 Requires Node ≥ 22.18 (native TypeScript type-stripping — `.ts` runs directly).
 `@aion/core` is a separate repo in the six-repo constitution and is consumed as

@@ -94,24 +94,53 @@ test('scoreRecord scores AI interpretation against rep ground truth', async () =
   const s = scoreRecord(rec);
   assert.equal(s.evaluable, true);
   assert.equal(s.finalized, true);
-  assert.equal(s.fieldsJudged, 6);
-  assert.equal(s.fieldsCorrect, 6);
+  assert.equal(s.fieldsJudged, 3, 'fact accuracy is measured over structured facts only (pain/urgency/authority)');
+  assert.equal(s.fieldsCorrect, 3);
+  assert.equal(s.objectionJudged, true);
   assert.equal(s.objectionCorrect, true);
   assert.equal(s.conversionAdvanced, true);
   assert.equal(s.downstreamConversion, true);
   assert.equal(s.lineageComplete, true, 'lineage carries canonical trace ids + snapshots');
 });
 
-test('an incorrect verdict lowers fact accuracy', async () => {
+test('an incorrect fact verdict lowers fact accuracy; interpretation fields are excluded', async () => {
   const rec = await recordFromFixture('funding-discovery-call', allCorrectGT({
     fields: {
       pain: { verdict: 'incorrect' }, urgency: { verdict: 'correct' }, authority: { verdict: 'correct' },
-      objection: { verdict: 'correct' }, conversation_stage: { verdict: 'edited', corrected: 'negotiation' }, buying_signals: { verdict: 'correct' },
+      // interpretation fields must NOT affect the fact-accuracy gate:
+      objection: { verdict: 'incorrect' }, conversation_stage: { verdict: 'edited', corrected: 'negotiation' }, buying_signals: { verdict: 'incorrect' },
     },
   }));
   const s = scoreRecord(rec);
-  assert.equal(s.fieldsJudged, 6);
-  assert.equal(s.fieldsCorrect, 4); // incorrect + edited both count as not-correct
+  assert.equal(s.fieldsJudged, 3, 'only pain/urgency/authority count toward fact accuracy');
+  assert.equal(s.fieldsCorrect, 2); // pain incorrect; urgency + authority correct
+  assert.equal(s.objectionCorrect, false); // scored separately
+});
+
+test('rep-value counts only the latest feedback per recommendation', async () => {
+  const rec = await recordFromFixture('funding-discovery-call', allCorrectGT({ guidance: null }));
+  rec.repBehavior.outcomes = [
+    { recommendationId: 'r1', feedback: 'wrong', atTurn: 1 },
+    { recommendationId: 'r1', feedback: 'useful', atTurn: 2 }, // rep changed their mind
+  ];
+  const s = scoreRecord(rec);
+  assert.equal(s.ratedInterventions, 1, 'one recommendation → one data point');
+  assert.equal(s.valuableInterventions, 1, 'latest verdict (useful) wins');
+});
+
+test('only meaningful downstream outcomes count toward the downstream gate', async () => {
+  const notMeaningful = await recordFromFixture('funding-discovery-call', allCorrectGT({ outcome: 'engaged', downstreamConversion: 'engaged' as any }));
+  assert.equal(scoreRecord(notMeaningful).downstreamConversion, false);
+  const meaningful = await recordFromFixture('funding-discovery-call', allCorrectGT({ outcome: 'application', downstreamConversion: 'application' }));
+  assert.equal(scoreRecord(meaningful).downstreamConversion, true);
+});
+
+test('lineage completeness requires feedback and an attributed response, not just a trace id', async () => {
+  // Finalized with no rep feedback (no per-rec outcomes, guidance null) → incomplete.
+  const rec = await recordFromFixture('funding-discovery-call', allCorrectGT({ guidance: null }));
+  rec.repBehavior.outcomes = [];
+  assert.equal(rec.during.lineage.every((l) => l.traceId.length > 0), true, 'trace ids exist');
+  assert.equal(scoreRecord(rec).lineageComplete, false, 'no feedback link → not complete');
 });
 
 test('dashboard aggregates gates and excludes non-evaluable sessions from real calls', async () => {

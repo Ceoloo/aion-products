@@ -17,11 +17,19 @@ npm run console          # → http://localhost:4173
 Set `ANTHROPIC_API_KEY` to run the interpretation through Claude (still governed
 by `@aion/core`); without it the deterministic path runs. Session records are
 written under `AION_DATA_DIR` (default `./data`, **git-ignored — real records
-are PII and are never committed**).
+are PII and are never committed**). Only the default `data/` path is git-ignored;
+if you override `AION_DATA_DIR`, point it **outside the repository** (the server
+prints a warning if a custom path resolves inside the repo).
+
+The server binds to `127.0.0.1` by default. For handheld/LAN use, set
+`AION_HOST=0.0.0.0` **and** `AION_TOKEN=<secret>`, then open
+`http://<lan-ip>:4173/?token=<secret>` on the phone — the API rejects requests
+without the token. Binding to a non-loopback host without a token prints a
+warning; prefer a trusted network or a tunnel.
 
 ## The loop
 
-```
+```text
 Prospect/context entry → Start Session → LIVE TRANSCRIPT
         │ (transcript adapter: paste / mic → Turn[])
         ▼
@@ -50,7 +58,7 @@ part of the intelligence architecture.
 
 ## Evaluability — don't count unanswered dials
 
-```
+```text
 Dial → Call Session → Conversation → Qualified Conversation → Conversion Event
 ```
 
@@ -89,7 +97,7 @@ not the AI's self-report — are what the dashboard scores.
 
 `npm run console` → Dashboard tab (or `GET /api/dashboard`):
 
-```
+```text
 REAL CALLS:             n / 25     (evaluable conversations)
 Fact accuracy:          %          (≥85% — rep-verified, before trusting auto CRM writes)
 Objection accuracy:     %          (≥85%)
@@ -98,6 +106,13 @@ Conversion advances:    n / 10
 Downstream conversions: n / 3
 Lineage completeness:   %          (context→state→rec→feedback→response→movement, =100%)
 ```
+
+Lineage completeness requires the **whole** documented chain to exist for a
+finalized call — every surfaced recommendation linked to a canonical trace id
+and detected-state snapshot, at least one intervention with rep feedback, at
+least one prospect response attributed, and the conversion movement recorded —
+not merely a trace id. A call with no feedback or no attributable response does
+not count as complete.
 
 These are the **real** Mission-001 gates. The synthetic `npm run eval` scorecard
 validates the plumbing; **this** dashboard validates the product. Mission-001

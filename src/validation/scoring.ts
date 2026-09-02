@@ -7,8 +7,8 @@
  * only evaluable conversations count toward the 25-real-conversation gate.
  */
 
-import type { SessionRecord, GroundTruthField } from '../domain/session.ts';
-import { GROUND_TRUTH_FIELDS, MEANINGFUL_OUTCOMES } from '../domain/session.ts';
+import type { SessionRecord } from '../domain/session.ts';
+import { FACT_ACCURACY_FIELDS, MEANINGFUL_OUTCOMES } from '../domain/session.ts';
 
 export interface RecordScore {
   sessionId: string;
@@ -25,57 +25,60 @@ export interface RecordScore {
   lineageComplete: boolean;
 }
 
+/** Score one finalized record's AI interpretation against the rep's ground truth. */
 export function scoreRecord(record: SessionRecord): RecordScore {
   const gt = record.after.groundTruth;
   const finalized = gt !== null;
 
+  // Fact accuracy is measured over clearly-stated STRUCTURED FACTS only
+  // (pain/urgency/authority). Objection is scored by its own gate; conversation
+  // stage and buying signals are interpretation, not part of the fact gate.
   let fieldsJudged = 0;
   let fieldsCorrect = 0;
-  let objectionJudged = false;
-  let objectionCorrect = false;
-
   if (gt) {
-    for (const field of GROUND_TRUTH_FIELDS as GroundTruthField[]) {
+    for (const field of FACT_ACCURACY_FIELDS) {
       const v = gt.fields[field];
       if (!v || v.verdict === 'not_applicable') continue;
       fieldsJudged += 1;
-      const correct = v.verdict === 'correct';
-      if (correct) fieldsCorrect += 1;
-      if (field === 'objection') {
-        objectionJudged = true;
-        objectionCorrect = correct;
-      }
+      if (v.verdict === 'correct') fieldsCorrect += 1;
     }
   }
+  const objV = gt?.fields.objection;
+  const objectionJudged = !!objV && objV.verdict !== 'not_applicable';
+  const objectionCorrect = objectionJudged && objV!.verdict === 'correct';
 
-  // Rep-value: prefer per-recommendation outcomes; fall back to the overall
-  // guidance rating so every finalized call contributes one data point.
+  // Rep-value: count only the LATEST feedback per recommendation (the UI
+  // presents a rating change as a replacement, but records append), then fall
+  // back to the overall guidance rating when no per-rec feedback exists.
+  const latest = new Map<string, string>();
+  for (const o of record.repBehavior.outcomes) latest.set(o.recommendationId, o.feedback);
   let rated = 0;
   let valuable = 0;
-  for (const o of record.repBehavior.outcomes) {
+  for (const fb of latest.values()) {
     rated += 1;
-    if (o.feedback === 'useful' || o.feedback === 'acted_on') valuable += 1;
+    if (fb === 'useful' || fb === 'acted_on') valuable += 1;
   }
   if (rated === 0 && gt && gt.guidance) {
-    if (gt.guidance === 'useful' || gt.guidance === 'acted_on') {
-      rated = 1;
-      valuable = 1;
-    } else if (gt.guidance === 'ignored' || gt.guidance === 'wrong') {
-      rated = 1;
-    } else if (gt.guidance === 'mixed') {
-      rated = 1;
-    }
+    if (gt.guidance === 'useful' || gt.guidance === 'acted_on') { rated = 1; valuable = 1; }
+    else if (gt.guidance === 'ignored' || gt.guidance === 'wrong' || gt.guidance === 'mixed') { rated = 1; }
   }
 
   const conversionAdvanced = gt?.advanced ?? false;
+  // Only a MEANINGFUL downstream outcome counts (application/appointment/etc.),
+  // whether named explicitly or implied by the call outcome.
   const downstreamConversion =
-    (gt?.downstreamConversion != null) ||
+    (gt?.downstreamConversion != null && MEANINGFUL_OUTCOMES.includes(gt.downstreamConversion)) ||
     (gt != null && MEANINGFUL_OUTCOMES.includes(gt.outcome));
 
+  // Lineage completeness requires the whole documented chain to exist for the
+  // call — context → detected state → recommendation → rep feedback → prospect
+  // response → conversion movement — not merely a trace id + snapshot.
   const lineage = record.during.lineage;
-  const lineageComplete =
-    lineage.length > 0 &&
-    lineage.every((r) => typeof r.traceId === 'string' && r.traceId.length > 0 && r.stateBefore !== undefined);
+  const hasStateLinked = lineage.length > 0 && lineage.every((r) => typeof r.traceId === 'string' && r.traceId.length > 0 && r.stateBefore !== undefined);
+  const hasFeedback = record.repBehavior.outcomes.length > 0 || (gt != null && gt.guidance != null);
+  const hasResponse = lineage.some((r) => r.prospectResponseTurn !== null);
+  const hasMovement = gt != null; // rep-confirmed advancement + AI outcome recorded at finalize
+  const lineageComplete = finalized && hasStateLinked && hasFeedback && hasResponse && hasMovement;
 
   return {
     sessionId: record.sessionId,
@@ -118,6 +121,7 @@ export interface DashboardMetrics {
 
 const TARGETS = { realCalls: 25, factAccuracy: 0.85, objectionAccuracy: 0.85, useful: 0.6, advances: 10, downstream: 3 };
 
+/** Aggregate finalized records into the Mission-001 validation dashboard metrics. */
 export function buildDashboard(records: SessionRecord[]): DashboardMetrics {
   const scores = records.map(scoreRecord);
   const evaluableFinal = records.filter((r, i) => r.evaluable && scores[i]!.finalized);

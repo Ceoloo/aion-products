@@ -286,11 +286,27 @@
 const $ = (id) => document.getElementById(id);
 let SID = null, SCHEMAS = [], latestState = null, latestRecs = [], transcript = [], speaker = 'prospect';
 const picks = { guid:null, adv:'no' };
+const TOKEN = new URLSearchParams(location.search).get('token') || '';
 
 async function api(path, method='GET', body) {
-  const r = await fetch(path, { method, headers: body?{'content-type':'application/json'}:{}, body: body?JSON.stringify(body):undefined });
+  const headers = {};
+  if (body) headers['content-type']='application/json';
+  if (TOKEN) headers['x-aion-token']=TOKEN;
+  const r = await fetch(path, { method, headers, body: body?JSON.stringify(body):undefined });
   if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||('HTTP '+r.status)); }
   return r.json();
+}
+
+// Serialize all ingest calls so out-of-order completions (esp. rapid mic
+// results) can never let an earlier turn overwrite state from a later turn.
+let ingestChain = Promise.resolve();
+function ingest(payload){
+  ingestChain = ingestChain.then(async ()=>{
+    if(!SID) return;
+    const d = await api(`/api/session/${SID}/ingest`,'POST',payload);
+    afterIngest(d);
+  }).catch(e=>{ if($('micNote')) $('micNote').textContent='ingest error: '+e.message; });
+  return ingestChain;
 }
 
 // Unified navigation: drives desktop tabs AND mobile phases.
@@ -345,20 +361,17 @@ async function startSession(){
   setPhase('live'); render();
 }
 
-async function ingestPaste(){
+function ingestPaste(){
   const t = $('paste').value.trim(); if(!t) return;
-  const d = await api(`/api/session/${SID}/ingest`,'POST',{transcript:t});
-  $('paste').value=''; afterIngest(d);
+  $('paste').value=''; ingest({transcript:t});
 }
-async function addTurn(){
+function addTurn(){
   const text = $('turnText').value.trim(); if(!text) return;
-  const d = await api(`/api/session/${SID}/ingest`,'POST',{speaker,text});
-  $('turnText').value=''; afterIngest(d);
+  $('turnText').value=''; ingest({speaker,text});
 }
-async function addTurnLive(){
+function addTurnLive(){
   const el=$('turnTextLive'); const text=el.value.trim(); if(!text||!SID) return;
-  const d = await api(`/api/session/${SID}/ingest`,'POST',{speaker,text});
-  el.value=''; afterIngest(d);
+  el.value=''; ingest({speaker,text});
 }
 function afterIngest(d){ latestState=d.state; latestRecs=d.recommendations||[]; refreshTranscript(); render(); }
 
@@ -401,7 +414,9 @@ const FIELDS = [
   ['conversation_stage','Conversation stage', s=>s.conversationStage],
   ['buying_signals','Buying signals', s=>(s.buyingSignals||[]).length+' detected'],
 ];
+function stopMic(){ if(micOn){ try{ rec && rec.stop(); }catch(_){} micOn=false; setMicLabel('🎤 Mic'); } }
 function endCall(){
+  stopMic(); // don't let mic results from this call leak into the next session
   const s = latestState||{};
   $('verdicts').innerHTML = FIELDS.map(([k,label,get])=>{
     const ai = (get(s)||'—');
@@ -429,7 +444,7 @@ async function finalize(){
   const gt = {
     fields, guidance:picks.guid, outcome:$('outcome').value, advanced:picks.adv==='yes',
     downstreamConversion:$('downstream').value||null, disposition:$('disposition').value,
-    evaluable:$('evaluable').checked, stageAfterId:$('outcome').value, notes:$('notes').value,
+    evaluable:$('evaluable').checked, notes:$('notes').value,
   };
   const d = await api(`/api/session/${SID}/finalize`,'POST',{groundTruth:gt});
   $('saved').innerHTML = `✅ Saved <b>${d.sessionId}</b> — kind: ${d.kind}, evaluable: ${d.evaluable}. <a href="#" onclick="resetCall();return false">New call</a> · <a href="#" onclick="navTo('dash');return false">Dashboard</a>`;
@@ -454,11 +469,11 @@ async function loadDashboard(){
     acc('Lineage completeness', m.lineageCompleteness, 1) +
     `<div class="metric"><div class="lab">Sessions / dials</div><div class="big">${m.totalSessions} / ${m.totalDials}</div></div>` +
     `<div class="metric ${m.gatesMet?'gate-ok':'gate-no'}"><div class="lab">All gates</div><div class="big">${m.gatesMet?'PASS':'—'}</div></div>`;
-  $('disp').innerHTML = Object.entries(m.dispositions).map(([k,v])=>`<span class="pill">${k}: ${v}</span>`).join(' ')||'none yet';
+  $('disp').innerHTML = Object.entries(m.dispositions).map(([k,v])=>`<span class="pill">${escapeHtml(k)}: ${Number(v)}</span>`).join(' ')||'none yet';
   $('recs-table').querySelector('tbody').innerHTML = d.records.map(r=>`<tr>
-    <td>${new Date(r.createdAt).toLocaleString()}</td><td>${escapeHtml(r.prospect)}</td><td>${r.industry}</td>
-    <td>${r.kind}</td><td>${r.disposition}</td><td>${r.evaluable?'✓':'—'}</td><td>${r.outcome||'—'}</td>
-    <td>${r.advanced?'▲':'—'}</td><td>${r.aiStage}</td></tr>`).join('');
+    <td>${escapeHtml(new Date(r.createdAt).toLocaleString())}</td><td>${escapeHtml(r.prospect)}</td><td>${escapeHtml(r.industry)}</td>
+    <td>${escapeHtml(r.kind)}</td><td>${escapeHtml(r.disposition)}</td><td>${r.evaluable?'✓':'—'}</td><td>${escapeHtml(r.outcome||'—')}</td>
+    <td>${r.advanced?'▲':'—'}</td><td>${escapeHtml(r.aiStage)}</td></tr>`).join('');
 }
 
 // Optional live mic (Web Speech API, Chrome/Android). Rep picks who is speaking.
@@ -470,7 +485,7 @@ function toggleMic(){
   if(!SID){ return; }
   if(micOn){ rec && rec.stop(); micOn=false; setMicLabel('🎤 Mic'); return; }
   rec = new SR(); rec.continuous=true; rec.interimResults=false; rec.lang='en-US';
-  rec.onresult=(e)=>{ for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal){ const text=e.results[i][0].transcript.trim(); if(text){ api(`/api/session/${SID}/ingest`,'POST',{speaker,text}).then(afterIngest); } } } };
+  rec.onresult=(e)=>{ for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal){ const text=e.results[i][0].transcript.trim(); if(text){ ingest({speaker,text}); } } } };
   rec.onerror=(e)=>{ if($('micNote')) $('micNote').textContent='mic error: '+e.error; };
   rec.onend=()=>{ if(micOn){ try{rec.start();}catch(_){} } }; // keep listening
   rec.start(); micOn=true; setMicLabel('⏹ Stop'); if($('micNote')) $('micNote').textContent='Listening — toggle Prospect/Rep before each speaker.';

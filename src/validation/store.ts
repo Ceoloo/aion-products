@@ -10,7 +10,7 @@
  * committed.
  */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SessionRecord } from '../domain/session.ts';
 
@@ -50,7 +50,12 @@ export class JsonSessionStore implements SessionStore {
 
   async save(record: SessionRecord): Promise<void> {
     await mkdir(this.dir, { recursive: true });
-    await writeFile(this.path(record.sessionId), JSON.stringify(record, null, 2), 'utf8');
+    // Atomic write: write a temp file, then rename over the final path so a
+    // crash mid-write can never leave a half-written (and thus skipped) record.
+    const final = this.path(record.sessionId);
+    const tmp = `${final}.tmp-${process.pid}-${Date.now()}`;
+    await writeFile(tmp, JSON.stringify(record, null, 2), 'utf8');
+    await rename(tmp, final);
   }
 
   async get(sessionId: string): Promise<SessionRecord | undefined> {
