@@ -68,6 +68,7 @@ still-governed deterministic fallback).
 ```bash
 npm run setup:core           # clone + build @aion/core (pinned) into .vendor/ (once)
 npm install                  # or: npm ci
+npm run console:build        # build the shadcn web console once (web/ → web/dist)
 npm run console              # Validation Console → http://localhost:4173 (real calls)
 npm run demo                 # replay a fixture call, see live guidance + post-call report
 npm run demo:contractor      # a different industry / ladder
@@ -77,13 +78,21 @@ npm run typecheck
 ```
 
 **Validation Console** (`npm run console`) is the operator surface for running
-the copilot on **real calls**: enter prospect/context, paste a transcript (or
-use the live mic), watch the live guidance, then correct the AI in a 30–60s
+the copilot on **real calls**: enter prospect/context, dictate with the live mic
+or paste a transcript, watch the live guidance, then correct the AI in a 30–60s
 form. Those corrections are the ground truth; the Dashboard tab scores the real
 Mission-001 gates. See [`docs/VALIDATION.md`](docs/VALIDATION.md). Real records
 are PII and persist to the git-ignored `data/` dir (override `AION_DATA_DIR`
 only to a path **outside** the repo). The server binds to loopback by default;
 for phone/LAN use set `AION_HOST=0.0.0.0` **and** `AION_TOKEN=<secret>`.
+
+The console is a mobile-optimized React + shadcn/ui SPA (`web/`), built to
+`web/dist` and served by the Node server; when the build is absent the server
+falls back to a dependency-free single-file console. The conversation view
+distinguishes **rep vs lead** automatically — the rep is inferred from the
+greeting/script/qualifying questions, the lead from answers, prices, and
+objections — with an Auto/Rep/Lead pin for live dictation. Speech-to-text uses
+the browser Web Speech API (Chrome/Edge); attribution runs server-side.
 
 Requires Node ≥ 22.18 (native TypeScript type-stripping — `.ts` runs directly).
 `@aion/core` is a separate repo in the six-repo constitution and is consumed as
@@ -129,6 +138,9 @@ src/
   pipeline/    LiveCopilot (the live loop) + post-call report builder
   eval/        evaluation harness that scores the Mission-001 gates
   cli/         demo + evaluate runners
+  server/      HTTP server + API + dependency-free console.html fallback
+  validation/  transcript adapter (speaker-role inference), record store, scoring
+web/           mobile-optimized React + shadcn/ui console (built to web/dist)
 fixtures/      labeled transcripts (synthetic evaluation set)
 scripts/       setup-core.sh (bootstraps @aion/core)
 test/          node:test suites

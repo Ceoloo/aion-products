@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseTranscript } from '../src/validation/transcript.ts';
+import { assignRoles, classifyLiveUtterance, roleLean } from '../src/validation/speaker-roles.ts';
 import { suggestEvaluable, suggestKind } from '../src/domain/session.ts';
 import type { GroundTruth, SessionRecord } from '../src/domain/session.ts';
 import { InMemorySessionStore, JsonSessionStore } from '../src/validation/store.ts';
@@ -29,6 +30,48 @@ test('parseTranscript attributes speakers, handles aliases and continuations', (
   assert.deepEqual(turns.map((t) => t.speaker), ['rep', 'prospect', 'rep', 'prospect']);
   assert.match(turns[1]!.text, /80k a month and we have 4 employees/); // continuation merged
   assert.equal(turns[2]!.text, 'thanks'); // "Agent -" alias
+});
+
+test('speaker roles: rep recognized from greeting/script, lead from answers/price', () => {
+  assert.ok(roleLean("Hi, this is Dana calling about working capital — got a quick minute?") > 0, 'greeting → rep');
+  assert.ok(roleLean("We do about $85,000 a month and I own the shop.") < 0, 'answer/ownership → lead');
+  assert.ok(roleLean("Honestly, what are the rates on this? It sounds too high.") < 0, 'price/terms + objection → lead');
+});
+
+test('speaker roles: unlabeled transcript is attributed by content', () => {
+  const turns = parseTranscript(
+    "Hi Marcus, this is Dana reaching out about working capital, do you have a minute?\n" +
+    "Sure. We do about $85,000 a month in revenue and I own the shop.\n" +
+    "Great — what are you hoping to accomplish, and how soon?\n" +
+    "I need around $80k for inventory. What are the rates though?",
+  );
+  assert.equal(turns[0]!.speaker, 'rep');
+  assert.equal(turns[1]!.speaker, 'prospect');
+  assert.equal(turns[3]!.speaker, 'prospect');
+});
+
+test('speaker roles: diarized channels are mapped to rep/lead', () => {
+  const r = assignRoles([
+    { channel: 'speaker 1', text: 'Hi, this is Dana calling from Keystone about working capital.' },
+    { channel: 'speaker 2', text: 'We do about $85k a month, I own the business. What would the rates be?' },
+    { channel: 'speaker 1', text: 'Good question — before rates, what does missing those orders cost you?' },
+  ]);
+  assert.equal(r.method, 'two-channel');
+  const bySpk = new Map(r.turns.map((t, i) => [i, t.speaker] as const));
+  assert.equal(bySpk.get(0), 'rep');
+  assert.equal(bySpk.get(1), 'prospect');
+  assert.equal(bySpk.get(2), 'rep');
+});
+
+test('speaker roles: explicit Rep:/Prospect: prefixes still win', () => {
+  const turns = parseTranscript('Prospect: what are the rates?\nRep: let me explain how it works');
+  assert.equal(turns[0]!.speaker, 'prospect');
+  assert.equal(turns[1]!.speaker, 'rep');
+});
+
+test('classifyLiveUtterance falls back to turn-taking when neutral', () => {
+  assert.equal(classifyLiveUtterance('Hello, this is Dana calling about funding', null).role, 'rep');
+  assert.equal(classifyLiveUtterance('mm, okay', 'rep').role, 'prospect'); // neutral → alternate
 });
 
 test('evaluability: unanswered/thin sessions are not conversations', () => {

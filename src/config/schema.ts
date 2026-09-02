@@ -44,6 +44,13 @@ export interface SalesSchema {
   /** Explainable conversion-readiness signal definitions. */
   readinessSignals: ReadinessSignalDef[];
   objectionPlaybook: ObjectionPlaybookEntry[];
+  /**
+   * Fact implications: `impliedFacts[key] = [a, b]` means a ladder gate on
+   * `key` is satisfied when a AND b are both confirmed, even if `key` itself
+   * was never captured as its own slot. E.g. pain is established once need +
+   * business impact are confirmed — so the copilot doesn't double-flag pain.
+   */
+  impliedFacts?: Partial<Record<FactKey, FactKey[]>>;
   terminology: {
     /** Noun for the meaningful downstream conversion, e.g. "application". */
     conversionEventNoun: string;

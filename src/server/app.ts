@@ -13,7 +13,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { createCopilot, buildReport } from '../aion.ts';
 import { getSchema, listSchemas } from '../config/registry.ts';
@@ -24,6 +24,7 @@ import type { Turn } from '../domain/types.ts';
 import type { GroundTruth, ConfirmedOutcome } from '../domain/session.ts';
 import { suggestEvaluable, suggestKind } from '../domain/session.ts';
 import { parseTranscript } from '../validation/transcript.ts';
+import { classifyLiveUtterance } from '../validation/speaker-roles.ts';
 import { JsonSessionStore } from '../validation/store.ts';
 import { assembleSessionRecord } from '../validation/record.ts';
 import { buildDashboard, scoreRecord } from '../validation/scoring.ts';
@@ -145,6 +146,51 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(s);
 }
 
+// Built SPA lives at <repo>/web/dist; HERE is <repo>/src/server.
+const WEB_DIST = resolve(HERE, '..', '..', 'web', 'dist');
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png',
+  '.woff2': 'font/woff2', '.map': 'application/json; charset=utf-8',
+};
+
+/**
+ * Serve the built SPA (index.html + hashed /assets/*). Returns true if the
+ * request was answered. For '/' and '/index.html', falls back to the
+ * dependency-free console.html when web/dist has not been built.
+ */
+async function serveStatic(res: ServerResponse, path: string): Promise<boolean> {
+  if (path === '/' || path === '/index.html') {
+    try {
+      const html = await readFile(join(WEB_DIST, 'index.html'));
+      res.writeHead(200, { 'content-type': MIME['.html'] });
+      res.end(html);
+      return true;
+    } catch {
+      const html = await readFile(join(HERE, 'console.html'));
+      res.writeHead(200, { 'content-type': MIME['.html'] });
+      res.end(html);
+      return true;
+    }
+  }
+  // Hashed assets: resolve under web/dist and reject any path traversal.
+  const target = resolve(WEB_DIST, '.' + path);
+  if (target !== WEB_DIST && !target.startsWith(WEB_DIST + sep)) return false;
+  try {
+    const buf = await readFile(target);
+    const ext = target.slice(target.lastIndexOf('.'));
+    res.writeHead(200, {
+      'content-type': MIME[ext] ?? 'application/octet-stream',
+      'cache-control': 'public, max-age=31536000, immutable',
+    });
+    res.end(buf);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -160,12 +206,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
   }
 
-  // Static console.
-  if (method === 'GET' && (path === '/' || path === '/index.html')) {
-    const html = await readFile(join(HERE, 'console.html'), 'utf8');
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(html);
-    return;
+  // Static console. Prefer the built shadcn SPA (web/dist); fall back to the
+  // dependency-free console.html when the SPA has not been built.
+  if (method === 'GET' && (path === '/' || path === '/index.html' || path.startsWith('/assets/'))) {
+    if (await serveStatic(res, path)) return;
   }
 
   if (method === 'GET' && path === '/api/schemas') {
@@ -233,14 +277,23 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       } else if (Array.isArray(body.turns)) {
         turns = body.turns.map((t: any) => ({ index: s.turnIndex++, speaker: t.speaker === 'rep' ? 'rep' : t.speaker === 'system' ? 'system' : 'prospect', text: String(t.text ?? '') }));
       } else if (body.text) {
-        turns = [{ index: s.turnIndex++, speaker: body.speaker === 'rep' ? 'rep' : 'prospect', text: String(body.text) }];
+        // Single live turn. If the speaker isn't tagged (or is "auto"), infer
+        // the role from the utterance + who spoke last (turn-taking).
+        let speaker: Turn['speaker'];
+        if (body.speaker === 'rep' || body.speaker === 'prospect') {
+          speaker = body.speaker;
+        } else {
+          const prev = [...s.copilot.getTranscript()].reverse().find((t) => t.speaker !== 'system');
+          speaker = classifyLiveUtterance(String(body.text), prev ? (prev.speaker as 'rep' | 'prospect') : null).role;
+        }
+        turns = [{ index: s.turnIndex++, speaker, text: String(body.text) }];
       }
       let last = null;
       for (const t of turns) {
         if (t.text.trim()) last = await s.copilot.ingest(t);
       }
       const state = s.copilot.currentState();
-      json(res, 200, { update: last, state, recommendations: last?.recommendations ?? [], ingested: turns.length });
+      json(res, 200, { update: last, state, recommendations: last?.recommendations ?? [], ingested: turns.length, turns });
       return;
     }
 
