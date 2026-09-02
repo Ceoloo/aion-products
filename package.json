@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test",
     "console": "node src/server/app.ts",
+    "preflight": "node src/cli/preflight.ts",
+    "golive": "bash scripts/golive.sh",
     "web:install": "npm --prefix web ci",
     "web:build": "npm --prefix web run build",
     "console:build": "npm --prefix web ci && npm --prefix web run build",

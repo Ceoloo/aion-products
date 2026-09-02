@@ -3,7 +3,7 @@ import {
   Headphones, ClipboardList, BarChart3, ClipboardEdit, Mic, Square, Send, PhoneOff,
   RotateCcw, Check, X, Pencil, Ban, Sparkles, TriangleAlert, User, UserRound,
 } from 'lucide-react';
-import { AionApi, type DealState, type Recommendation, type SchemaInfo, type Turn, type DashboardMetrics, type DashboardRecord, type GateStatus } from '@/lib/api';
+import { AionApi, type DealState, type Recommendation, type SchemaInfo, type Turn, type DashboardMetrics, type DashboardRecord, type GateStatus, type ReadinessReport } from '@/lib/api';
 import { useMic } from '@/hooks/useMic';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -186,7 +186,9 @@ function SetupView({ schemas, onStart }: { schemas: SchemaInfo[]; onStart: (b: R
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
 
   return (
-    <Card className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl space-y-4">
+    <ReadinessBanner />
+    <Card>
       <CardHeader><CardTitle>New call session</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div><Label>Industry / schema</Label>
@@ -221,6 +223,46 @@ function SetupView({ schemas, onStart }: { schemas: SchemaInfo[]; onStart: (b: R
         <Button className="w-full" size="lg" onClick={() => onStart({ industry, ...f, conversionStageId: stageNow, desiredNextStageId: stageNext })}>Start session</Button>
       </CardContent>
     </Card>
+    </div>
+  );
+}
+
+const READY_ICON = { ok: '✅', warn: '⚠️', blocker: '⛔' } as const;
+
+/** Production readiness banner — the operator's GO / NOT-READY signal for a real call. */
+function ReadinessBanner() {
+  const [r, setR] = useState<ReadinessReport | null>(null);
+  const [err, setErr] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { AionApi.health().then(setR).catch(() => setErr(true)); }, []);
+  if (err || !r) return null;
+
+  const blockers = r.checks.filter((c) => c.level === 'blocker');
+  const warns = r.checks.filter((c) => c.level === 'warn');
+  const tone = blockers.length ? 'border-destructive/50 bg-destructive/10 text-destructive'
+    : warns.length ? 'border-warn/40 bg-warn/10 text-warn'
+    : 'border-ok/40 bg-ok/10 text-ok';
+  const headline = blockers.length ? `Not ready — ${blockers.length} blocker${blockers.length > 1 ? 's' : ''} before a real call`
+    : `Ready for a real call · ${r.aiPath === 'claude' ? 'Claude' : 'deterministic'} path${warns.length ? ` · ${warns.length} warning${warns.length > 1 ? 's' : ''}` : ''}`;
+
+  return (
+    <div className={cn('rounded-lg border px-3 py-2 text-sm', tone)}>
+      <button className="flex w-full items-center gap-2 text-left font-medium" onClick={() => setOpen((o) => !o)}>
+        {blockers.length ? <TriangleAlert className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        <span>{headline}</span>
+        <span className="ml-auto text-xs opacity-70">{open ? 'hide' : 'details'}</span>
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1">
+          {r.checks.map((c) => (
+            <li key={c.id} className="flex gap-2 text-xs">
+              <span>{READY_ICON[c.level]}</span>
+              <span className="text-foreground"><span className="font-medium">{c.title}.</span> <span className="text-muted-foreground">{c.detail}</span></span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -31,6 +31,8 @@ jobs:
         run: npm run typecheck
       - name: unit + integration tests
         run: npm test
+      - name: production readiness preflight (smoke)
+        run: npm run preflight
 
   web-build:
     name: web console (typecheck + build)

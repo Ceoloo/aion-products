@@ -92,7 +92,12 @@ export interface DashboardRecord {
   disposition: string; evaluable: boolean; finalized: boolean; outcome: string | null; advanced: boolean; aiStage: string;
 }
 
+export type ReadinessLevel = 'ok' | 'warn' | 'blocker';
+export interface ReadinessCheck { id: string; level: ReadinessLevel; title: string; detail: string }
+export interface ReadinessReport { checks: ReadinessCheck[]; ready: boolean; aiPath: 'claude' | 'deterministic' }
+
 export const AionApi = {
+  health: () => api<ReadinessReport>('/api/health'),
   schemas: () => api<{ schemas: SchemaInfo[] }>('/api/schemas'),
   createSession: (body: Record<string, unknown>) => api<{ sessionId: string; briefing: string; aiPath: string }>('/api/session', 'POST', body),
   ingestText: (id: string, text: string, speaker?: 'rep' | 'prospect' | 'auto') => api<IngestResult>(`/api/session/${id}/ingest`, 'POST', { text, speaker }),

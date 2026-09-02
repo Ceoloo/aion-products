@@ -28,6 +28,7 @@ import { classifyLiveUtterance } from '../validation/speaker-roles.ts';
 import { JsonSessionStore } from '../validation/store.ts';
 import { assembleSessionRecord } from '../validation/record.ts';
 import { buildDashboard, scoreRecord } from '../validation/scoring.ts';
+import { gatherReadiness } from '../validation/readiness.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4173);
@@ -212,6 +213,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (await serveStatic(res, path)) return;
   }
 
+  if (method === 'GET' && path === '/api/health') {
+    // Production readiness for a real call. Runs the same preflight the CLI uses,
+    // reflecting THIS server's bind host/token/data-dir. No secrets are returned.
+    const report = await gatherReadiness({ host: HOST, token: TOKEN, dataDir: DATA_DIR });
+    json(res, report.ready ? 200 : 503, report);
+    return;
+  }
+
   if (method === 'GET' && path === '/api/schemas') {
     json(res, 200, {
       schemas: listSchemas().map((s) => ({
@@ -393,7 +402,19 @@ export function start(): void {
     });
   });
   server.listen(PORT, HOST, () => {
-    console.log(`AION Validation Console → http://${loopback ? 'localhost' : HOST}:${PORT}${TOKEN ? '/?token=<AION_TOKEN>' : ''}  (data dir: ${DATA_DIR})`);
+    // Token travels in the URL fragment (never the request line); paste the real
+    // AION_TOKEN in place of <AION_TOKEN>.
+    console.log(`AION Validation Console → http://${loopback ? 'localhost' : HOST}:${PORT}/${TOKEN ? '#token=<AION_TOKEN>' : ''}  (data dir: ${DATA_DIR})`);
+    gatherReadiness({ host: HOST, token: TOKEN, dataDir: DATA_DIR })
+      .then((r) => {
+        const blockers = r.checks.filter((c) => c.level === 'blocker');
+        if (blockers.length) {
+          console.warn(`⚠ NOT READY for a real call — ${blockers.length} blocker(s): ${blockers.map((b) => b.title).join(', ')}. Run \`npm run preflight\` for details.`);
+        } else {
+          console.log(`Readiness: READY (${r.aiPath === 'claude' ? 'Claude' : 'deterministic'} path). Runbook: docs/FIRST-CALL.md`);
+        }
+      })
+      .catch(() => {});
   });
 }
 
