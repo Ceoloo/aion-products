@@ -3,6 +3,7 @@
 
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 
+/** Same-origin JSON fetch helper: forwards the LAN token and throws on non-2xx. */
 async function api<T = any>(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body) headers['content-type'] = 'application/json';

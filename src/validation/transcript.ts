@@ -76,6 +76,13 @@ function segment(text: string): Segment[] {
   return segments;
 }
 
+/**
+ * Parse a pasted transcript into ordered rep/prospect turns. Explicit
+ * `Rep:` / `Prospect:` labels are honored as-is; otherwise roles are inferred
+ * from diarization channels (`Speaker 1:` …) and/or content cues via
+ * `assignRoles`. Pass `inferRoles` to force content inference even when some
+ * lines are explicitly labeled.
+ */
 export function parseTranscript(text: string, opts: ParseOptions = {}): Turn[] {
   const segments = segment(text);
   const hasExplicitRoles = segments.some((s) => s.role);
