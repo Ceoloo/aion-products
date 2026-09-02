@@ -18,7 +18,7 @@ and measures what actually drives conversion.
 Not one terminal state. Revenue Copilot optimizes progression along a
 configurable **conversion ladder**:
 
-```
+```text
 CONTACT → ENGAGED → QUALIFIED → PAIN/NEED CONFIRMED → INTENT →
 NEXT STEP COMMITTED → APPLICATION/DEMO/APPOINTMENT/PROPOSAL → CLOSED → REVENUE
 ```
@@ -53,6 +53,24 @@ do not change.
 See [`GATES.md`](GATES.md). `npm run eval` reports the scorecard over the
 synthetic fixture set (all gates instrumented and passing); production
 validation requires ≥25 real conversations as described there.
+
+### Status
+
+```text
+Architecture integration       ✅  canonical @aion/core is the governed chokepoint
+Synthetic engineering gates    ✅  npm run eval — all gates green in CI
+Canonical product on main      ✅  PR #1 merged
+Validation harness             ✅  npm run console (see VALIDATION.md)
+Production validation          ⏳  0 / 25 real evaluable conversations
+
+MISSION-001 overall            🟡 VALIDATION
+MISSION-002                    🔒 BLOCKED
+```
+
+The next milestone is operational, not architectural: **Revenue Copilot observes
+its first real customer conversation**, via the Validation Console
+([`VALIDATION.md`](VALIDATION.md)). Development shifts from adding features to
+feeding real calls through the system.
 
 ### Implementation
 

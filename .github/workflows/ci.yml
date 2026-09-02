@@ -5,12 +5,18 @@ on:
   push:
     branches: [main]
 
+# Least privilege: every job here only reads the repo (clone + build + test).
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: typecheck + tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           # Native TypeScript type-stripping requires Node >= 22.18.
@@ -25,6 +31,28 @@ jobs:
         run: npm run typecheck
       - name: unit + integration tests
         run: npm test
+      - name: production readiness preflight (smoke)
+        run: npm run preflight
+
+  web-build:
+    name: web console (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: install web deps
+        working-directory: web
+        run: npm ci
+      - name: typecheck web
+        working-directory: web
+        run: npm run typecheck
+      - name: build web SPA
+        working-directory: web
+        run: npm run build
 
   synthetic-mission-eval:
     # Named to make it impossible to mistake a green run for production
@@ -35,6 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'

@@ -8,9 +8,10 @@
  */
 
 import type { DealState } from '../domain/deal.ts';
+import type { FactKey } from '../domain/facts.ts';
 import type { LadderPosition, LadderStage } from '../domain/ladder.ts';
 import type { SalesSchema } from '../config/schema.ts';
-import { factKnown, hasCommitment, hasUnresolvedObjection } from '../domain/predicates.ts';
+import { factSatisfied, hasCommitment, hasUnresolvedObjection } from '../domain/predicates.ts';
 
 export interface StageGateReport {
   stage: LadderStage;
@@ -18,10 +19,21 @@ export interface StageGateReport {
   unmet: string[];
 }
 
-export function evaluateStageGate(state: DealState, stage: LadderStage): StageGateReport {
+/**
+ * Test whether a single ladder rung's gate is satisfied by the current deal
+ * state: every required fact is known or implied (see `factSatisfied`), and any
+ * objection-resolution / commitment requirements are met. `impliedFacts` lets a
+ * schema express fact implications so an already-established fact isn't
+ * re-flagged. Returns the report with the specific unmet conditions.
+ */
+export function evaluateStageGate(
+  state: DealState,
+  stage: LadderStage,
+  impliedFacts?: Partial<Record<FactKey, FactKey[]>>,
+): StageGateReport {
   const unmet: string[] = [];
   for (const f of stage.gateFacts) {
-    if (!factKnown(state, f)) unmet.push(`fact:${f}`);
+    if (!factSatisfied(state, f, impliedFacts)) unmet.push(`fact:${f}`);
   }
   if (stage.requiresObjectionsResolved && hasUnresolvedObjection(state)) unmet.push('objections_unresolved');
   if (stage.requiresCommitment && !hasCommitment(state)) unmet.push('no_commitment');
@@ -36,9 +48,15 @@ export interface LadderEvaluation {
   blockingUnmet: string[];
 }
 
+/**
+ * Walk the schema's ladder in order and find how far the deal has progressed:
+ * the current (highest contiguous satisfied) rung and the first blocking rung
+ * with its unmet conditions. Outcome-only rungs are never live-advanced into
+ * (they are set post-call). Schema `impliedFacts` are threaded into each gate.
+ */
 export function evaluateLadder(state: DealState, schema: SalesSchema): LadderEvaluation {
   const ordered = [...schema.ladder.stages].sort((a, b) => a.order - b.order);
-  const reports = ordered.map((s) => evaluateStageGate(state, s));
+  const reports = ordered.map((s) => evaluateStageGate(state, s, schema.impliedFacts));
 
   let currentOrder = 0;
   let blockingStage: LadderStage | null = null;

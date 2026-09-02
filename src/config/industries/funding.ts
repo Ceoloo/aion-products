@@ -78,5 +78,8 @@ export const fundingSchema: SalesSchema = {
       responseStrategy: 'Develop the pain and its impact before positioning capital; if truly no need, disqualify cleanly.',
     },
   ],
+  // Pain is established once the need and its business impact are both
+  // confirmed — don't separately flag "establish pain" in that case.
+  impliedFacts: { pain: ['need', 'business_impact'] },
   terminology: { conversionEventNoun: 'application', prospectNoun: 'business owner' },
 };
