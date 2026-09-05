@@ -45,6 +45,10 @@ const TOKEN = readToken();
 
 /** Same-origin JSON fetch helper: forwards the LAN token and throws on non-2xx. */
 async function api<T = any>(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T> {
+  if (import.meta.env.MODE === 'preview') {
+    const { previewApi } = await import('./preview-api');
+    return previewApi(path, method, body) as Promise<T>;
+  }
   const headers: Record<string, string> = {};
   if (body) headers['content-type'] = 'application/json';
   if (TOKEN) headers['x-aion-token'] = TOKEN;

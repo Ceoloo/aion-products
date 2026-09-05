@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm run setup:core && npm ci && npm --prefix web ci",
+  "buildCommand": "npm --prefix web run build -- --mode preview",
+  "outputDirectory": "web/dist",
+  "headers": [{ "source": "/(.*)", "headers": [
+    { "key": "X-Content-Type-Options", "value": "nosniff" },
+    { "key": "Referrer-Policy", "value": "no-referrer" }
+  ] }]
+}
