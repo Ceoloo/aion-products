@@ -73,6 +73,9 @@ export default function App() {
   return (
     <div className="min-h-full flex flex-col">
       <Header screen={screen} onNav={navGuard} live={!!sessionId} />
+      {import.meta.env.MODE === 'preview' && <div className="mx-auto w-full max-w-6xl px-4 pt-4 text-sm text-amber-300" role="status">
+        Test preview · Deterministic guidance, no Claude connection. Use sample conversations. Saved test records stay in this tab; active calls reset on refresh. No CRM sync.
+      </div>}
       {toast && (
         <div className="mx-auto mt-3 w-full max-w-6xl px-4">
           <div className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">{toast}</div>

@@ -6,7 +6,7 @@
  * call.
  */
 
-import type { Confidence, ConversationStage, Evidence, Sentiment, Turn, Urgency } from './types.ts';
+import type { Confidence, ConversationStage, Evidence, Sentiment, Urgency } from './types.ts';
 import type { FactMap } from './facts.ts';
 import type { LadderPosition } from './ladder.ts';
 
