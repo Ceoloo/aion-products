@@ -106,6 +106,8 @@ export interface DashboardMetrics {
   totalSessions: number;
   totalDials: number;
   evaluableConversations: number;
+  /** Synthetic/smoke records present in the store but excluded from all gates. */
+  syntheticSessions: number;
   // Gates
   realCalls: GateStatus; // evaluable & finalized, target 25
   factAccuracy: number | null; // target 0.85
@@ -122,7 +124,10 @@ export interface DashboardMetrics {
 const TARGETS = { realCalls: 25, factAccuracy: 0.85, objectionAccuracy: 0.85, useful: 0.6, advances: 10, downstream: 3 };
 
 /** Aggregate finalized records into the Mission-001 validation dashboard metrics. */
-export function buildDashboard(records: SessionRecord[]): DashboardMetrics {
+export function buildDashboard(allRecords: SessionRecord[]): DashboardMetrics {
+  // Synthetic/smoke records never count toward the real Mission-001 gates.
+  const syntheticSessions = allRecords.filter((r) => r.synthetic).length;
+  const records = allRecords.filter((r) => !r.synthetic);
   const scores = records.map(scoreRecord);
   const evaluableFinal = records.filter((r, i) => r.evaluable && scores[i]!.finalized);
   const evalScores = scores.filter((s) => s.evaluable && s.finalized);
@@ -164,6 +169,7 @@ export function buildDashboard(records: SessionRecord[]): DashboardMetrics {
     totalSessions: records.length,
     totalDials: records.filter((r) => r.kind === 'dial').length,
     evaluableConversations: records.filter((r) => r.evaluable).length,
+    syntheticSessions,
     realCalls,
     factAccuracy,
     objectionAccuracy,

@@ -518,6 +518,7 @@ function DashboardView({ onNewCall }: { onNewCall: () => void }) {
             <AccTile label="Lineage completeness" v={m.lineageCompleteness} target={1} />
             <Tile label="Sessions / dials" value={`${m.totalSessions} / ${m.totalDials}`} />
             <Tile label="All gates" value={m.gatesMet ? 'PASS' : '—'} good={m.gatesMet} />
+            {m.syntheticSessions > 0 && <Tile label="Synthetic (excluded)" value={String(m.syntheticSessions)} />}
           </div>
           <div>
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Failure data (dispositions)</div>
@@ -539,7 +540,7 @@ function DashboardView({ onNewCall }: { onNewCall: () => void }) {
               {records.map((r) => (
                 <tr key={r.sessionId} className="border-b border-border/60">
                   <td className="px-2 py-2">{new Date(r.createdAt).toLocaleString()}</td>
-                  <td className="px-2 py-2">{r.prospect}</td><td className="px-2 py-2">{r.industry}</td>
+                  <td className="px-2 py-2">{r.prospect}{r.synthetic && <Badge variant="outline" className="ml-1.5 text-[10px]">synthetic</Badge>}</td><td className="px-2 py-2">{r.industry}</td>
                   <td className="px-2 py-2">{titleCase(r.kind)}</td><td className="px-2 py-2">{titleCase(r.disposition)}</td>
                   <td className="px-2 py-2">{r.evaluable ? '✓' : '—'}</td><td className="px-2 py-2">{r.outcome ? titleCase(r.outcome) : '—'}</td>
                   <td className="px-2 py-2">{r.advanced ? '▲' : '—'}</td><td className="px-2 py-2">{r.aiStage}</td>

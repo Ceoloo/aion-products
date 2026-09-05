@@ -32,6 +32,11 @@ jobs:
       - name: unit + integration tests
         run: npm test
       - name: production readiness preflight (smoke)
+        # Point at a throwaway data dir so the smoke check never touches the real
+        # validation dataset, and mark anything it might write as synthetic.
+        env:
+          AION_DATA_DIR: ${{ runner.temp }}/aion-preflight
+          AION_SYNTHETIC: '1'
         run: npm run preflight
 
   web-build:

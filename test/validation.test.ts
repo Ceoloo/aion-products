@@ -252,3 +252,87 @@ test('end-to-end: pasted transcript → live pipeline → persisted record → d
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ── HTTP handler helpers (drive src/server/app.ts's handle directly) ─────────
+function mockReq(method: string, url: string, body?: unknown) {
+  const payload = body === undefined ? '' : JSON.stringify(body);
+  return {
+    method,
+    url,
+    headers: { 'content-type': 'application/json' },
+    async *[Symbol.asyncIterator]() { if (payload) yield Buffer.from(payload); },
+  } as any;
+}
+function mockRes() {
+  return {
+    status: 0,
+    result: null as null | { status: number; body: any },
+    writeHead(s: number) { this.status = s; },
+    end(str?: string) { this.result = { status: this.status, body: str ? JSON.parse(str) : null }; },
+    get headersSent() { return this.status !== 0; },
+  };
+}
+function callHandle(app: any, method: string, url: string, body?: unknown): Promise<{ status: number; body: any }> {
+  const res = mockRes();
+  return app.handle(mockReq(method, url, body), res).then(() => res.result!);
+}
+
+test('server: finalize waits for an in-flight ingest — final turn + guidance are in the saved record', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'aion-race-'));
+  process.env.AION_CONSOLE_NO_AUTOSTART = '1';
+  process.env.AION_DATA_DIR = dir;
+  const app: any = await import('../src/server/app.ts');
+  // A deliberately slow provider so a turn stays "in flight" long enough for a
+  // finalize to arrive mid-ingest. It throws after the delay, so the governed
+  // adapter falls back to the deterministic path (still real ingestion).
+  const slow = { name: 'slow-fake', async complete() { await new Promise((r) => setTimeout(r, 80)); throw new Error('slow-fake → deterministic fallback'); } };
+  app.__setProviderOverride(slow);
+  try {
+    const created = await callHandle(app, 'POST', '/api/session', {
+      industry: 'funding', prospectName: 'Race Test', conversionStageId: 'contact', desiredNextStageId: 'application',
+    });
+    assert.equal(created.status, 200);
+    const sid = created.body.sessionId as string;
+
+    // Seed one turn so state exists, then fire the FINAL turn and DO NOT await it.
+    await callHandle(app, 'POST', `/api/session/${sid}/ingest`, { text: 'We do about $85k a month and I own the shop.', speaker: 'prospect' });
+    const pIngestFinal = callHandle(app, 'POST', `/api/session/${sid}/ingest`, { text: 'Okay that makes sense — send me the application, let us do it.', speaker: 'prospect' });
+    // Let the ingest get in flight (its slow provider await), THEN finalize.
+    await new Promise((r) => setTimeout(r, 15));
+    const pFinal = callHandle(app, 'POST', `/api/session/${sid}/finalize`, {
+      groundTruth: { fields: {}, guidance: 'useful', outcome: 'application', disposition: 'conversation', advanced: true, downstreamConversion: null, evaluable: true, notes: 'race' },
+    });
+    const [ingRes, finRes] = await Promise.all([pIngestFinal, pFinal]);
+
+    assert.equal(ingRes.status, 200, 'the in-flight ingest still completed with 200');
+    assert.equal(finRes.status, 200, 'finalize succeeded');
+
+    // The saved canonical record must include the final turn AND surfaced guidance.
+    const saved = await new JsonSessionStore(dir).get(sid);
+    assert.ok(saved, 'record persisted');
+    const texts = saved!.during.transcript.map((t) => t.text).join(' | ');
+    assert.match(texts, /send me the application/, 'final in-flight turn is in the saved transcript');
+    assert.ok(saved!.during.recommendations.length > 0, 'guidance surfaced during the call is captured');
+    assert.ok(saved!.during.lineage.length > 0, 'lineage captured');
+  } finally {
+    app.__setProviderOverride(undefined);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('records marked synthetic are excluded from the Mission-001 gates', async () => {
+  const store = new InMemorySessionStore();
+  const industry = 'funding';
+  const fx = getFixture('funding-discovery-call');
+  const { copilot, exec } = await createCopilot({ callId: 'syn_1', industry, context: fx.context, llm: null });
+  for (const t of parseTranscript(fx.turns.map((t) => `${t.speaker === 'rep' ? 'Rep' : 'Prospect'}: ${t.text}`).join('\n'))) await copilot.ingest(t);
+  const report = buildReport(copilot, exec, getSchema(industry));
+  const base = { prospectId: fx.context.prospect.id, repId: 'rep_test', industry, createdAt: new Date().toISOString(), context: fx.context, copilot, report, groundTruth: allCorrectGT() };
+  await store.save(assembleSessionRecord({ ...base, sessionId: 'real_1' }));
+  await store.save(assembleSessionRecord({ ...base, sessionId: 'syn_1', synthetic: true }));
+
+  const m = buildDashboard(await store.list());
+  assert.equal(m.realCalls.value, 1, 'only the real record counts toward the 25-gate');
+  assert.equal(m.syntheticSessions, 1, 'synthetic record is reported but excluded');
+  assert.equal(m.totalSessions, 1, 'totals reflect real records only');
+});

@@ -18,6 +18,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { createCopilot, buildReport } from '../aion.ts';
 import { getSchema, listSchemas } from '../config/registry.ts';
 import type { AiExecutionService } from '../platform/ai-execution.ts';
+import type { LlmProvider } from '../platform/provider-adapter.ts';
 import type { LiveCopilot } from '../pipeline/copilot.ts';
 import type { ContextInput } from '../engines/context.ts';
 import type { Turn } from '../domain/types.ts';
@@ -39,6 +40,10 @@ const HOST = process.env.AION_HOST ?? '127.0.0.1';
 const TOKEN = (process.env.AION_TOKEN ?? '').trim();
 const DATA_DIR = process.env.AION_DATA_DIR ?? join(process.cwd(), 'data');
 const store = new JsonSessionStore(DATA_DIR);
+// When set, every record this server saves is marked synthetic (smoke/rehearsal/
+// demo) and excluded from Mission-001 gates — keeps such runs out of the real
+// validation dataset. Real-call operators leave this unset.
+const SYNTHETIC = process.env.AION_SYNTHETIC === '1';
 
 // Whitelists for validating operator-supplied ground truth (defence in depth;
 // combined with escaping on render, this blocks stored XSS / garbage records).
@@ -89,9 +94,24 @@ interface LiveSession {
   exec: AiExecutionService;
   turnIndex: number;
   finalizing: boolean;
+  /**
+   * Per-session mutation lock. Ingest and finalize chain their copilot work on
+   * this promise so they run strictly in order: a finalize that arrives while
+   * an ingest is still in flight waits for that turn (and its guidance) to land
+   * before the canonical record is assembled — the final turn is never lost.
+   */
+  lock: Promise<unknown>;
 }
 
 const live = new Map<string, LiveSession>();
+
+// Test-only seam: inject the LLM provider used for new sessions. `undefined`
+// (default) means detect from the environment; `null` forces the deterministic
+// path; a provider is used as-is. Never set in production.
+let providerOverride: LlmProvider | null | undefined = undefined;
+export function __setProviderOverride(p: LlmProvider | null | undefined): void {
+  providerOverride = p;
+}
 
 function id(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -244,7 +264,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
     const context = buildContext(body, industry);
     const sessionId = id('sess');
-    const { copilot, exec } = await createCopilot({ callId: sessionId, industry, context });
+    const { copilot, exec } = await createCopilot({
+      callId: sessionId,
+      industry,
+      context,
+      ...(providerOverride !== undefined ? { llm: providerOverride } : {}),
+    });
     live.set(sessionId, {
       sessionId,
       prospectId: context.prospect.id,
@@ -256,6 +281,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       exec,
       turnIndex: 0,
       finalizing: false,
+      lock: Promise.resolve(),
     });
     json(res, 200, { sessionId, briefing: copilot.context.briefing, aiPath: exec.llmAvailable() ? 'claude' : 'deterministic' });
     return;
@@ -300,11 +326,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         }
         turns = [{ index: s.turnIndex++, speaker, text: String(body.text) }];
       }
-      let last = null;
-      let accepted = 0;
-      for (const t of turns) {
-        if (t.text.trim()) { last = await s.copilot.ingest(t); accepted += 1; }
-      }
+      // Run the ingest through the per-session lock so it can't interleave with
+      // a concurrent finalize (which would otherwise assemble the record before
+      // this turn lands). turnIndex was already assigned synchronously above, so
+      // transcript order is preserved regardless of when the work runs.
+      const work = s.lock.then(async () => {
+        let last = null;
+        let accepted = 0;
+        for (const t of turns) {
+          if (t.text.trim()) { last = await s.copilot.ingest(t); accepted += 1; }
+        }
+        return { last, accepted };
+      });
+      s.lock = work.catch(() => {}); // keep the chain alive if a turn throws
+      const { last, accepted } = await work;
       const state = s.copilot.currentState();
       json(res, 200, { update: last, state, recommendations: last?.recommendations ?? [], ingested: accepted, turns });
       return;
@@ -324,20 +359,27 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
 
     if (action === 'finalize' && method === 'POST') {
-      s.finalizing = true; // freeze the session against concurrent ingest/feedback
-      const report = buildReport(s.copilot, s.exec, getSchema(s.industry));
+      s.finalizing = true; // reject NEW ingest/feedback/finalize from here on (sync)
+      // Assemble the record BEHIND the lock, so any ingest already in flight
+      // finishes first and its final turn + guidance are included in the record.
       const gt = sanitizeGroundTruth(body.groundTruth);
-      const record = assembleSessionRecord({
-        sessionId: s.sessionId,
-        prospectId: s.prospectId,
-        repId: s.repId,
-        industry: s.industry,
-        createdAt: s.createdAt,
-        context: s.context,
-        copilot: s.copilot,
-        report,
-        groundTruth: gt,
+      const assembly = s.lock.then(() => {
+        const report = buildReport(s.copilot, s.exec, getSchema(s.industry));
+        return assembleSessionRecord({
+          sessionId: s.sessionId,
+          prospectId: s.prospectId,
+          repId: s.repId,
+          industry: s.industry,
+          createdAt: s.createdAt,
+          context: s.context,
+          copilot: s.copilot,
+          report,
+          groundTruth: gt,
+          synthetic: SYNTHETIC,
+        });
       });
+      s.lock = assembly.catch(() => {}); // keep the chain alive
+      const record = await assembly;
       try {
         await store.save(record);
       } catch (e) {
@@ -364,6 +406,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         kind: r.kind,
         disposition: r.disposition,
         evaluable: r.evaluable,
+        synthetic: r.synthetic === true,
         finalized: r.finalizedAt !== null,
         outcome: r.after.groundTruth?.outcome ?? null,
         advanced: r.after.groundTruth?.advanced ?? r.after.aiOutcome.advanced,

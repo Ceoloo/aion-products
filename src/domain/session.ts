@@ -139,6 +139,13 @@ export interface SessionRecord {
   disposition: Disposition;
   /** Whether this session counts toward the 25-evaluable-conversation gate. */
   evaluable: boolean;
+  /**
+   * A synthetic/smoke record (dress-rehearsal, CI, demo) — NOT a real customer
+   * conversation. Kept in the store for debugging but EXCLUDED from every
+   * Mission-001 gate so it can never contaminate the real validation dataset.
+   * Absent/false means a real record.
+   */
+  synthetic?: boolean;
 
   // ── BEFORE ───────────────────────────────────────────────────────────
   before: {

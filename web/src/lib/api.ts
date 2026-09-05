@@ -82,14 +82,14 @@ export interface SchemaInfo { key: string; label: string; conversionEventNoun: s
 export interface IngestResult { state: DealState; recommendations: Recommendation[]; ingested: number; turns?: Turn[] }
 export interface GateStatus { value: number; target: number; met: boolean }
 export interface DashboardMetrics {
-  totalSessions: number; totalDials: number; evaluableConversations: number;
+  totalSessions: number; totalDials: number; evaluableConversations: number; syntheticSessions: number;
   realCalls: GateStatus; factAccuracy: number | null; objectionAccuracy: number | null;
   usefulInterventionRate: number | null; conversionAdvances: GateStatus; downstreamConversions: GateStatus;
   lineageCompleteness: number | null; dispositions: Record<string, number>; gatesMet: boolean;
 }
 export interface DashboardRecord {
   sessionId: string; createdAt: string; prospect: string; industry: string; kind: string;
-  disposition: string; evaluable: boolean; finalized: boolean; outcome: string | null; advanced: boolean; aiStage: string;
+  disposition: string; evaluable: boolean; synthetic: boolean; finalized: boolean; outcome: string | null; advanced: boolean; aiStage: string;
 }
 
 export type ReadinessLevel = 'ok' | 'warn' | 'blocker';

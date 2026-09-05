@@ -20,6 +20,8 @@ export interface AssembleParams {
   copilot: LiveCopilot;
   report: CallIntelligence;
   groundTruth: GroundTruth | null;
+  /** Mark this a synthetic/smoke record, excluded from Mission-001 gates. */
+  synthetic?: boolean;
 }
 
 export function assembleSessionRecord(p: AssembleParams): SessionRecord {
@@ -44,6 +46,7 @@ export function assembleSessionRecord(p: AssembleParams): SessionRecord {
     kind,
     disposition: p.groundTruth?.disposition ?? (evaluable ? 'conversation' : 'no_contact'),
     evaluable,
+    synthetic: p.synthetic === true,
     before: {
       conversionStageId: p.context.conversionStageId,
       context: p.context,

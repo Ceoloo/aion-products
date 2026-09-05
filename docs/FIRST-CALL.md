@@ -32,6 +32,21 @@ make a real call unsafe (can't run, or would leak/lose PII). Resolve every ⛔
 | Network exposure | bound off-loopback (`AION_HOST`) without `AION_TOKEN` |
 | Operator console | *(warn only)* `web/dist` not built → fallback console |
 
+## 0b. Dress-rehearsal vs. real (keep the dataset clean)
+
+Before the first real call you may want a full dress-rehearsal (real Claude
+execution, sample transcript). Run it with `AION_SYNTHETIC=1` set:
+
+```bash
+AION_SYNTHETIC=1 AION_DATA_DIR="$HOME/aion-rehearsal" npm run golive
+```
+
+Every record such a server saves is marked `synthetic` and is **excluded from
+all Mission-001 gates** (it shows on the dashboard as "Synthetic (excluded)").
+For real calls, leave `AION_SYNTHETIC` unset and use your real `AION_DATA_DIR`.
+Keep the two data directories separate so a rehearsal or demo can never
+contaminate the real validation dataset.
+
 ## 1. Consent & compliance (do not skip)
 
 Real conversations are PII.
