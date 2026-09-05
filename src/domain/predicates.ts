@@ -12,6 +12,23 @@ export function factKnown(state: DealState, key: FactKey, minConfidence = 0.5): 
   return !!slot && slot.value !== null && slot.confidence >= minConfidence;
 }
 
+/**
+ * A fact counts as satisfied if it is known OR implied by other confirmed facts.
+ * `implied[key] = [a, b]` means key is satisfied when a AND b are both known.
+ * This lets a schema express e.g. "pain is established once need + business
+ * impact are both confirmed", so the copilot doesn't double-flag pain.
+ */
+export function factSatisfied(
+  state: DealState,
+  key: FactKey,
+  implied?: Partial<Record<FactKey, FactKey[]>>,
+  minConfidence = 0.5,
+): boolean {
+  if (factKnown(state, key, minConfidence)) return true;
+  const via = implied?.[key];
+  return !!via && via.length > 0 && via.every((f) => factKnown(state, f, minConfidence));
+}
+
 export function unresolvedObjections(state: DealState): Objection[] {
   return state.objections.filter((o) => o.status !== 'resolved');
 }

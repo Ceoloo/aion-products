@@ -68,12 +68,41 @@ still-governed deterministic fallback).
 ```bash
 npm run setup:core           # clone + build @aion/core (pinned) into .vendor/ (once)
 npm install                  # or: npm ci
-npm run demo                 # replay a call, see live guidance + post-call report
+npm run console:build        # build the shadcn web console once (web/ → web/dist)
+npm run preflight            # production readiness check before a real call (GO / blockers)
+npm run golive               # preflight → build console if needed → start it
+npm run console              # Validation Console → http://localhost:4173 (real calls)
+npm run demo                 # replay a fixture call, see live guidance + post-call report
 npm run demo:contractor      # a different industry / ladder
-npm run eval                 # Mission-001 gate scorecard over the fixture set
+npm run eval                 # SYNTHETIC gate scorecard over the fixture set
 npm test                     # unit + integration + gate tests
 npm run typecheck
 ```
+
+**Validation Console** (`npm run console`) is the operator surface for running
+the copilot on **real calls**: enter prospect/context, dictate with the live mic
+or paste a transcript, watch the live guidance, then correct the AI in a 30–60s
+form. Those corrections are the ground truth; the Dashboard tab scores the real
+Mission-001 gates. See [`docs/VALIDATION.md`](docs/VALIDATION.md). Real records
+are PII and persist to the git-ignored `data/` dir (override `AION_DATA_DIR`
+only to a path **outside** the repo). The server binds to loopback by default;
+for phone/LAN use set `AION_HOST=0.0.0.0` **and** `AION_TOKEN=<secret>`.
+
+**Before the first real call**, run `npm run preflight` (or `npm run golive`):
+it verifies the environment is safe to ingest a real conversation — Node ≥ 22.18,
+`@aion/core` resolves, a schema is registered, the governed Claude path is active
+(`ANTHROPIC_API_KEY` set), the data dir holds PII outside the repo, and the
+bind host isn't exposing unauthenticated routes — printing a GO / blocker
+scorecard (also served at `/api/health` and shown as a banner in the console).
+Follow [`docs/FIRST-CALL.md`](docs/FIRST-CALL.md) to run call #1 end to end.
+
+The console is a mobile-optimized React + shadcn/ui SPA (`web/`), built to
+`web/dist` and served by the Node server; when the build is absent the server
+falls back to a dependency-free single-file console. The conversation view
+distinguishes **rep vs lead** automatically — the rep is inferred from the
+greeting/script/qualifying questions, the lead from answers, prices, and
+objections — with an Auto/Rep/Lead pin for live dictation. Speech-to-text uses
+the browser Web Speech API (Chrome/Edge); attribution runs server-side.
 
 Requires Node ≥ 22.18 (native TypeScript type-stripping — `.ts` runs directly).
 `@aion/core` is a separate repo in the six-repo constitution and is consumed as
@@ -119,8 +148,11 @@ src/
   pipeline/    LiveCopilot (the live loop) + post-call report builder
   eval/        evaluation harness that scores the Mission-001 gates
   cli/         demo + evaluate runners
+  server/      HTTP server + API (+ /api/health) + dependency-free console.html fallback
+  validation/  transcript adapter (speaker-role inference), record store, scoring, readiness
+web/           mobile-optimized React + shadcn/ui console (built to web/dist)
 fixtures/      labeled transcripts (synthetic evaluation set)
-scripts/       setup-core.sh (bootstraps @aion/core)
+scripts/       setup-core.sh (bootstraps @aion/core), golive.sh (preflight → serve)
 test/          node:test suites
 docs/          MISSION-001, ARCHITECTURE, GATES
 ```

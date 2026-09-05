@@ -82,6 +82,22 @@ test('ladder gating advances only when prefix gates are satisfied and stops at o
   assert.equal(evalB.currentOrder, 6, 'capped at application (outcome-only funded not auto-reached)');
 });
 
+test('pain gate is satisfied by need + business_impact (no double-flag)', () => {
+  // qualified facts + need + impact known, but pain never captured as its own slot.
+  const s = blankState({
+    facts: {
+      revenue: slot('revenue', '$80k/mo'), time_in_business: slot('time_in_business', '5 years'),
+      decision_authority: slot('decision_authority', 'owner'),
+      need: slot('need', 'inventory'), business_impact: slot('business_impact', 'impact $40,000'),
+    },
+  });
+  const ev = evaluateLadder(s, fundingSchema);
+  // Reaches "Pain / Need Confirmed" (order 3); blocked next on intent (urgency/amount), NOT on pain.
+  assert.equal(ev.currentOrder, 3, 'need_confirmed reached via implied pain');
+  assert.equal(ev.blockingStage?.id, 'intent');
+  assert.ok(!ev.blockingUnmet.includes('fact:pain'), 'pain is not flagged when need+impact are confirmed');
+});
+
 test('readiness score is explainable — reconstructable from its signals', () => {
   const s = blankState({
     urgency: 'high',
