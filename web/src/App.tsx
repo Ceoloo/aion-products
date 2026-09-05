@@ -417,8 +417,10 @@ function Bubble({ turn }: { turn: Turn }) {
 function ValidateView({ state, transcript, onSave }: { state: DealState; transcript: Turn[]; onSave: (gt: unknown) => void }) {
   const [verdicts, setVerdicts] = useState<Record<string, { verdict: string; corrected?: string }>>({});
   const [guidance, setGuidance] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState('application');
-  const [disposition, setDisposition] = useState('conversation');
+  // No presumptive defaults — the outcome/disposition must be an explicit rep
+  // choice (a forgotten default would mislabel e.g. a no-contact call).
+  const [outcome, setOutcome] = useState('');
+  const [disposition, setDisposition] = useState('');
   const [advanced, setAdvanced] = useState(false);
   const [downstream, setDownstream] = useState('');
   const suggestEval = useMemo(() => {
@@ -462,12 +464,12 @@ function ValidateView({ state, transcript, onSave }: { state: DealState; transcr
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div><Label>Call outcome</Label>
-            <Select value={outcome} onValueChange={setOutcome}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <div><Label>Call outcome <span className="text-destructive">*</span></Label>
+            <Select value={outcome} onValueChange={setOutcome}><SelectTrigger className="mt-1"><SelectValue placeholder="Select outcome…" /></SelectTrigger>
               <SelectContent>{OUTCOMES.map((o) => <SelectItem key={o} value={o}>{titleCase(o)}</SelectItem>)}</SelectContent></Select>
           </div>
-          <div><Label>Disposition</Label>
-            <Select value={disposition} onValueChange={setDisposition}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <div><Label>Disposition <span className="text-destructive">*</span></Label>
+            <Select value={disposition} onValueChange={setDisposition}><SelectTrigger className="mt-1"><SelectValue placeholder="Select disposition…" /></SelectTrigger>
               <SelectContent>{DISPOSITIONS.map((o) => <SelectItem key={o} value={o}>{titleCase(o)}</SelectItem>)}</SelectContent></Select>
           </div>
           <div><Label>Did the deal advance?</Label>
@@ -483,7 +485,8 @@ function ValidateView({ state, transcript, onSave }: { state: DealState; transcr
         </div>
         <label className="flex items-center gap-2 text-sm"><Checkbox checked={evaluable} onCheckedChange={(v) => setEvaluable(!!v)} /> Evaluable conversation (counts toward the 25-gate)</label>
         <div><Label>Notes</Label><Textarea className="mt-1" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <Button className="w-full" size="lg" onClick={() => onSave({ fields: verdicts, guidance, outcome, disposition, advanced, downstreamConversion: downstream || null, evaluable, notes })}>Save canonical record</Button>
+        <Button className="w-full" size="lg" disabled={!outcome || !disposition} onClick={() => onSave({ fields: verdicts, guidance, outcome, disposition, advanced, downstreamConversion: downstream || null, evaluable, notes })}>Save canonical record</Button>
+        {(!outcome || !disposition) && <p className="text-center text-xs text-muted-foreground">Select the call outcome and disposition to save.</p>}
       </CardContent>
     </Card>
   );
