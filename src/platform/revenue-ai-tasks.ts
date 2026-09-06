@@ -53,3 +53,11 @@ export function capabilityForEngine(engine: string): string {
 
 /** All capabilities the Revenue Copilot agent is granted. */
 export const REVENUE_CAPABILITIES: string[] = Object.values(ENGINE_CAPABILITY);
+
+/**
+ * Engine → Service Catalog key (`name@version`). Week 3 Copilot submits these
+ * through Runtime instead of ad-hoc capabilities.
+ */
+export function serviceKeyForEngine(engine: string): string {
+  return `${capabilityForEngine(engine)}@1`;
+}
