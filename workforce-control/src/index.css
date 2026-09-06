@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Industrial ops — graphite / olive / signal amber (not purple AI defaults) */
+    --background: 90 12% 7%;
+    --foreground: 48 18% 90%;
+    --card: 90 10% 10%;
+    --card-foreground: 48 18% 90%;
+    --popover: 90 12% 9%;
+    --popover-foreground: 48 18% 90%;
+    --primary: 48 92% 52%;
+    --primary-foreground: 90 20% 8%;
+    --secondary: 95 8% 14%;
+    --secondary-foreground: 48 12% 88%;
+    --muted: 95 7% 13%;
+    --muted-foreground: 70 8% 58%;
+    --accent: 155 18% 16%;
+    --accent-foreground: 48 20% 92%;
+    --destructive: 4 72% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 90 8% 18%;
+    --input: 90 8% 18%;
+    --ring: 48 92% 52%;
+    --ok: 145 45% 42%;
+    --warn: 32 90% 52%;
+    --signal: 48 92% 52%;
+    --radius: 0.35rem;
+  }
+
+  * { @apply border-border; }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(ellipse 90% 55% at 12% -10%, hsl(48 40% 18% / 0.28), transparent 55%),
+      radial-gradient(ellipse 70% 45% at 95% 8%, hsl(155 25% 14% / 0.35), transparent 50%),
+      linear-gradient(180deg, hsl(90 12% 7%), hsl(95 10% 5%));
+    background-attachment: fixed;
+    min-height: 100%;
+  }
+
+  html, body, #root { height: 100%; }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.28);
+  }
+}
+
+@layer utilities {
+  .ops-grid {
+    background-image:
+      linear-gradient(hsl(90 8% 18% / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(90 8% 18% / 0.35) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(180deg, black, transparent 85%);
+  }
+}
