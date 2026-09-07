@@ -61,8 +61,30 @@ From repo root:
 - `npm run workforce:build`
 - `npm run workforce:typecheck`
 
+## Production (after OPS-001)
+
+Do **not** deploy this Console against a stub Runtime.
+
+1. Complete [OPS-001](https://github.com/Ceoloo/aion-docs/blob/cursor/execution-object-agent-identity-6743/roadmap/ops-001-live-runtime.md) —
+   live `https://runtime.aionsystems.ai` behind Traefik with health green.
+2. Create Vercel project `aion-operator-console` from `workforce-control/`.
+3. Build-time env:
+
+| Variable | Value |
+|---|---|
+| `VITE_AION_RUNTIME_URL` | `https://runtime.aionsystems.ai` |
+| `VITE_AION_TENANT_ID` | default tenant hint (e.g. `aion-systems`) — **not authority** |
+| `VITE_AION_OPERATOR_ID` | `decidedBy` hint — **not authority** |
+
+4. On Runtime `/opt/aion/.env`, set `AION_CORS_ORIGINS` to the exact Vercel origin(s)
+   and redeploy the Runtime image that includes CORS support.
+
+Tenant isolation and actor authorization remain Gateway + Core policy. The UI
+only calls governed APIs.
+
 ## Next slices (friction-driven)
 
 - Policy-aware retry (refuse when side effects may not be idempotent)
 - Console v2 from OL-001 operator behavior
 - Do **not** start OL-002 until 100/100 baseline exists
+- Do **not** wire Vercel until OPS-001 health checks pass
