@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { ApprovalPanel } from '@/components/ApprovalPanel';
 import { useTenant } from '@/hooks/useTenant';
+import {
+  isOl001ProductionMission,
+  isPreOlValidationMission,
+} from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { ApprovalRequest, EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 
@@ -12,6 +16,7 @@ const COHORT_TARGET = 100;
  * OL-001 scoreboard heartbeat.
  * HARD RULE: numbers only from API. Empty → "—".
  * Protect: pipeline ≠ attributed ≠ collected.
+ * Protect: PRE-OL validation missions never inflate 0/100 progress.
  */
 export default function Ol001Scoreboard() {
   const { tenantId } = useTenant();
@@ -53,13 +58,23 @@ export default function Ol001Scoreboard() {
     };
   }, [tenantId, tick]);
 
-  /** Prefer missions tagged OL-001; fall back to all tenant missions for early cohort. */
-  const cohortMissions = useMemo(() => {
-    const tagged = missions.filter(
-      (m) => m.metadata?.cohort === 'OL-001' || String(m.name).includes('OL-001'),
+  /** Strict: only explicit OL-001 production-economic missions count. */
+  const cohortMissions = useMemo(
+    () => missions.filter(isOl001ProductionMission),
+    [missions],
+  );
+
+  const preOl = useMemo(() => {
+    const preMissions = missions.filter(isPreOlValidationMission);
+    const preIds = new Set(preMissions.map((m) => m.missionId));
+    const preExecutions = executions.filter(
+      (e) => e.missionId && preIds.has(e.missionId),
     );
-    return tagged.length > 0 ? tagged : missions;
-  }, [missions]);
+    return {
+      missions: preMissions.length,
+      executions: preExecutions.length || null,
+    };
+  }, [missions, executions]);
 
   const production = useMemo(() => {
     const by = (s: string) => cohortMissions.filter((m) => m.status === s).length;
@@ -84,7 +99,7 @@ export default function Ol001Scoreboard() {
   }, [economics, cohortMissions.length]);
 
   const econ = useMemo(() => {
-    if (!economics) {
+    if (!economics || cohortMissions.length === 0) {
       return {
         costPerMission: null as string | null,
         costPerSuccess: null as string | null,
@@ -92,11 +107,7 @@ export default function Ol001Scoreboard() {
         evPerCost: null as string | number | null,
       };
     }
-    const costPerMission =
-      cohortMissions.length > 0
-        ? (economics.totalCostUnits / cohortMissions.length).toFixed(2)
-        : null;
-    const successes = Math.max(production.successful, 1);
+    const costPerMission = (economics.totalCostUnits / cohortMissions.length).toFixed(2);
     const costPerSuccess =
       production.successful > 0
         ? (economics.totalCostUnits / production.successful).toFixed(2)
@@ -105,7 +116,6 @@ export default function Ol001Scoreboard() {
       economics.totalExecutions > 0
         ? (economics.attributedEconomicValue / economics.totalExecutions).toFixed(2)
         : null;
-    void successes;
     return {
       costPerMission,
       costPerSuccess,
@@ -143,18 +153,21 @@ export default function Ol001Scoreboard() {
     >
       <header className="mb-8 animate-fade-up">
         <p className="text-[0.7rem] uppercase tracking-[0.22em] text-muted-foreground">
-          OL-001 · Revenue Production
+          OL-001 · Revenue Production · PAUSED
         </p>
         <h1 className="mt-2 font-display text-4xl md:text-5xl font-semibold tracking-tight">
           Scoreboard
         </h1>
         <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-          Heartbeat for the 100-mission cohort. Empty cells are honest unknowns —
-          never invented. Pipeline ≠ attributed ≠ collected.
+          Heartbeat for the 100-mission cohort. Counts only missions with{' '}
+          <span className="font-mono text-xs">cohort=OL-001</span> and{' '}
+          <span className="font-mono text-xs">productionEconomic=true</span>.
+          PRE-OL validation is preserved but excluded. Pipeline ≠ attributed ≠
+          collected.
         </p>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
           <Link className="text-primary underline-offset-2 hover:underline" to="/missions/new">
-            + New Mission
+            + New Mission (PRE-OL)
           </Link>
           <Link className="text-muted-foreground hover:text-foreground" to="/missions">
             Mission Control
@@ -167,7 +180,7 @@ export default function Ol001Scoreboard() {
       </header>
 
       <div className="space-y-8 animate-fade-up" style={{ animationDelay: '40ms' }}>
-        <Section title="Production">
+        <Section title="OL-001 progress (production only)">
           <Row
             label="Real missions"
             value={`${production.real} / ${COHORT_TARGET}`}
@@ -178,19 +191,40 @@ export default function Ol001Scoreboard() {
           <Row label="In progress" value={fmt(production.inProgress)} />
         </Section>
 
+        <Section title="PRE-OL validation (excluded from 100)">
+          <Row
+            label="Validation missions"
+            value={fmt(preOl.missions)}
+            hint="system tests / console launches before live GHL+model gates"
+          />
+          <Row
+            label="Validation executions"
+            value={fmt(preOl.executions)}
+            hint="useful Runtime evidence — not revenue production"
+          />
+        </Section>
+
         <Section title="Throughput">
           <Row label="Missions / day" value="—" hint="needs cohort date window" />
           <Row label="Median completion time" value="—" hint="needs duration distribution" />
         </Section>
 
         <Section title="Human load">
-          <Row label="Intervention rate" value={fmt(human.interventionRate)} />
+          <Row
+            label="Intervention rate"
+            value={fmt(human.interventionRate)}
+            hint="tenant-wide until cohort-scoped economics exist"
+          />
           <Row label="Approvals / mission" value={fmt(human.approvalsPerMission)} />
           <Row label="Human minutes / mission" value="—" hint="operator time not yet instrumented" />
         </Section>
 
         <Section title="Economics">
-          <Row label="Cost / mission" value={fmt(econ.costPerMission)} />
+          <Row
+            label="Cost / mission"
+            value={fmt(econ.costPerMission)}
+            hint={cohortMissions.length === 0 ? 'no OL-001 production missions yet' : undefined}
+          />
           <Row label="Cost / successful mission" value={fmt(econ.costPerSuccess)} />
           <Row label="Economic value / execution" value={fmt(econ.evPerExe)} />
           <Row label="EV / execution cost" value={fmt(econ.evPerCost)} />
@@ -205,8 +239,12 @@ export default function Ol001Scoreboard() {
           <Row label="Revenue influenced" value="—" hint="soft assist — keep separate" />
           <Row
             label="Revenue attributed"
-            value={fmt(economics?.attributedEconomicValue)}
-            hint="M005 attributed EV on executions"
+            value={
+              cohortMissions.length > 0
+                ? fmt(economics?.attributedEconomicValue)
+                : '—'
+            }
+            hint="only meaningful once OL-001 production missions exist"
           />
           <Row label="Revenue collected" value="—" hint="cash only — never conflate" />
         </Section>

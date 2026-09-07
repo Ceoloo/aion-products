@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { useTenant } from '@/hooks/useTenant';
+import { COHORT_PRE_OL } from '@/lib/cohort';
 import { RuntimeApi, RuntimeHttpError } from '@/lib/runtime-api';
 import { REVENUE_PRODUCTION_V1, WORKFLOW_TEMPLATES } from '@/lib/workflows';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ function mintId(prefix: string): string {
 
 /**
  * New Mission — Launch submits POST /v1/missions/run (canonical Runtime contract).
- * No UI-specific execution path. Autonomy stays policy-managed.
+ * While OL-001 is paused, launches are PRE-OL validation (not production cohort).
  */
 export default function NewMission() {
   const { tenantId } = useTenant();
@@ -58,12 +59,20 @@ export default function NewMission() {
     const actorId = mintId('act');
     const agentId = mintId('agt');
 
+    const cohortMeta = {
+      cohort: COHORT_PRE_OL,
+      synthetic: false,
+      productionEconomic: false,
+      launchedFrom: 'operator-console',
+      workflowTemplateId: template.id,
+    };
+
     const actor = {
       actorType: 'agent' as const,
       actorId,
       agentId,
-      name: 'OL-001 Revenue Operator',
-      purpose: 'OL-001 revenue production loop via Operator Console',
+      name: 'PRE-OL Validation Operator',
+      purpose: 'Pre-OL validation via Operator Console (not OL-001 production credit)',
       owner: 'aion-operator-console',
       domain: 'revenue',
       role: 'copilot',
@@ -73,29 +82,24 @@ export default function NewMission() {
       maxRiskLevel: 'R3',
       autonomyLevel: 'L2',
       ...(costBudget !== undefined ? { costBudget } : {}),
-      metadata: {
-        launchedFrom: 'operator-console',
-        cohort: 'OL-001',
-        workflowTemplateId: template.id,
-      },
+      metadata: cohortMeta,
     };
 
     const name =
       missionName.trim() ||
-      `OL-001 · ${template.label} · ${new Date(stamp).toISOString().slice(0, 16)}`;
+      `PRE-OL · ${template.label} · ${new Date(stamp).toISOString().slice(0, 16)}`;
 
     const body: Record<string, unknown> = {
       actor,
-      requestIdPrefix: `ol001-${stamp}`,
+      requestIdPrefix: `pre-ol-${stamp}`,
       mission: {
         name,
         owner: template.owner,
-        objective: objective.trim() || 'Revenue production',
+        objective: objective.trim() || 'Pre-OL validation',
         status: 'active',
         riskLevel: 'R1',
         metadata: {
-          cohort: 'OL-001',
-          workflowTemplateId: template.id,
+          ...cohortMeta,
           workflowVersion: template.version,
           budgetUnits: costBudget ?? null,
           autonomy: 'policy-managed',
@@ -123,7 +127,8 @@ export default function NewMission() {
           })),
         metadata: {
           templateId: template.id,
-          cohort: 'OL-001',
+          cohort: COHORT_PRE_OL,
+          productionEconomic: false,
           humanOperatedSteps: template.steps
             .filter((s) => s.humanOperated)
             .map((s) => s.name),
@@ -133,7 +138,9 @@ export default function NewMission() {
         },
       },
       metadata: {
-        cohort: 'OL-001',
+        cohort: COHORT_PRE_OL,
+        productionEconomic: false,
+        synthetic: false,
         source: 'operator-console',
         ...(template.secureAutomationStandard
           ? { secureAutomation: template.secureAutomationStandard }
@@ -168,7 +175,7 @@ export default function NewMission() {
       body.stepPayloads = {
         'ghl-upsert': {
           provider: 'ghl',
-          contact: { email: leadEmail.trim(), source: 'aion-ol001' },
+          contact: { email: leadEmail.trim(), source: 'aion-pre-ol' },
         },
       };
     } else {
@@ -176,8 +183,8 @@ export default function NewMission() {
         'ghl-upsert': {
           provider: 'ghl',
           contact: {
-            email: `ol001-${stamp}@example.invalid`,
-            source: 'aion-ol001',
+            email: `pre-ol-${stamp}@example.invalid`,
+            source: 'aion-pre-ol',
           },
         },
       };
@@ -214,14 +221,16 @@ export default function NewMission() {
 
       <header className="mb-8 animate-fade-up">
         <p className="text-[0.7rem] uppercase tracking-[0.22em] text-muted-foreground">
-          UX-001 · New Mission
+          UX-001 · New Mission · PRE-OL
         </p>
         <h1 className="mt-2 font-display text-4xl md:text-5xl font-semibold tracking-tight">
           Launch
         </h1>
         <p className="mt-3 max-w-xl text-sm text-muted-foreground">
           Submits the canonical <span className="font-mono text-xs">POST /v1/missions/run</span>{' '}
-          contract. Autonomy stays policy-managed — this form does not raise L-levels.
+          contract. While OL-001 is paused, launches are tagged{' '}
+          <span className="font-mono text-xs">pre_ol_validation</span> and do not count toward
+          the 100-mission cohort.
         </p>
       </header>
 
@@ -241,7 +250,7 @@ export default function NewMission() {
             id="name"
             value={missionName}
             onChange={(e) => setMissionName(e.target.value)}
-            placeholder="Auto-named if empty"
+            placeholder="PRE-OL · … (auto if empty)"
           />
         </div>
 
@@ -284,8 +293,8 @@ export default function NewMission() {
           <Input
             id="budget"
             type="number"
-            min={0}
-            step={1}
+            min="0"
+            step="1"
             value={budget}
             onChange={(e) => setBudget(e.target.value)}
           />
@@ -295,31 +304,21 @@ export default function NewMission() {
           <Label htmlFor="email">
             {template.id === 'lead-to-appointment-v1'
               ? 'Lead email (optional CRM context)'
-              : 'Lead email (GHL upsert)'}
+              : 'Lead email (optional)'}
           </Label>
           <Input
             id="email"
             type="email"
             value={leadEmail}
             onChange={(e) => setLeadEmail(e.target.value)}
-            placeholder="optional — placeholder used if empty"
+            placeholder="Uses placeholder @example.invalid if empty"
           />
-        </div>
-
-        <div className="rounded-md border border-border/70 bg-card/40 px-3 py-3">
-          <div className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
-            Autonomy
-          </div>
-          <div className="mt-1 text-sm">Policy managed</div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            M008 grants apply at Runtime. Console never bypasses risk / approval policy.
-          </p>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-          {submitting ? 'Launching…' : 'Launch Mission'}
+        <Button type="submit" disabled={submitting}>
+          {submitting ? 'Launching…' : 'Launch PRE-OL mission'}
         </Button>
       </form>
     </Shell>
