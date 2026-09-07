@@ -61,6 +61,9 @@ export default function ImplementationDetail() {
   const [baselineMetric, setBaselineMetric] = useState('');
   const [targetState, setTargetState] = useState('');
   const [firstWorkflowName, setFirstWorkflowName] = useState('');
+  const [stepEvidence, setStepEvidence] = useState<Record<string, string>>({});
+  const [ghlLocationId, setGhlLocationId] = useState('');
+  const [modelProvider, setModelProvider] = useState('');
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -194,6 +197,137 @@ export default function ImplementationDetail() {
     }
   }
 
+  async function startProvisioning() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await RuntimeApi.startImplementationProvisioning(tenantId, caseId, {
+        startedBy: OPERATOR_ID,
+      });
+      setCase(res.case);
+    } catch (err: unknown) {
+      setError(
+        err instanceof RuntimeHttpError
+          ? `${err.code}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : 'Start provisioning failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyStep(stepKey: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const evidence = (stepEvidence[stepKey] ?? '').trim();
+      const res = await RuntimeApi.updateImplementationProvisioningStep(
+        tenantId,
+        caseId,
+        stepKey,
+        {
+          status: 'verified',
+          evidence,
+          completedBy: OPERATOR_ID,
+        },
+      );
+      setCase(res.case);
+    } catch (err: unknown) {
+      setError(
+        err instanceof RuntimeHttpError
+          ? `${err.code}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : 'Verify failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function probeStep(stepKey: 'ghl_connection' | 'model_access', confirm: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await RuntimeApi.probeImplementationProvisioningStep(
+        tenantId,
+        caseId,
+        stepKey,
+        {
+          confirm,
+          completedBy: OPERATOR_ID,
+          ...(stepKey === 'ghl_connection' && ghlLocationId
+            ? { locationId: ghlLocationId, apiKeyPresent: true }
+            : {}),
+          ...(stepKey === 'model_access' && modelProvider
+            ? { provider: modelProvider, apiKeyPresent: true }
+            : {}),
+        },
+      );
+      setCase(res.case);
+      if (!confirm && res.probe) {
+        setStepEvidence((prev) => ({
+          ...prev,
+          [stepKey]: res.probe!.evidence,
+        }));
+      }
+    } catch (err: unknown) {
+      setError(
+        err instanceof RuntimeHttpError
+          ? `${err.code}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : 'Probe failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markReady() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await RuntimeApi.markImplementationActivationReady(tenantId, caseId, {
+        markedBy: OPERATOR_ID,
+      });
+      setCase(res.case);
+    } catch (err: unknown) {
+      setError(
+        err instanceof RuntimeHttpError
+          ? `${err.code}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : 'Mark ready failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function activate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await RuntimeApi.activateImplementation(tenantId, caseId, {
+        approvedBy: OPERATOR_ID,
+      });
+      setCase(res.case);
+    } catch (err: unknown) {
+      setError(
+        err instanceof RuntimeHttpError
+          ? `${err.code}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : 'Activate failed',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <Shell>
@@ -219,6 +353,10 @@ export default function ImplementationDetail() {
     c.deliveryStatus === 'recommendation_ready' ||
     c.deliveryStatus === 'blueprint_draft';
   const canApprove = c.deliveryStatus === 'blueprint_draft';
+  const canStartProvisioning = c.deliveryStatus === 'blueprint_approved';
+  const canProvision = c.deliveryStatus === 'provisioning';
+  const canMarkReady = c.deliveryStatus === 'provisioning';
+  const canActivate = c.deliveryStatus === 'activation_ready';
 
   return (
     <Shell>
@@ -464,14 +602,139 @@ export default function ImplementationDetail() {
             )}
           </div>
 
-          <h2 className="font-display text-xl pt-4">Provisioning (visible gates)</h2>
-          <ul className="text-sm space-y-1.5">
+          <h2 className="font-display text-xl pt-4">4. Provisioning + activation (IE-002)</h2>
+          <p className="text-xs text-muted-foreground">
+            Commercial acceptance ≠ activation. Every verified step needs evidence + actor.
+            GHL and model probes check readiness only — they do not auto-provision.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {canStartProvisioning && (
+              <Button type="button" onClick={startProvisioning} disabled={busy}>
+                Start provisioning
+              </Button>
+            )}
+            {canMarkReady && (
+              <Button type="button" variant="outline" onClick={markReady} disabled={busy}>
+                Mark activation ready
+              </Button>
+            )}
+            {canActivate && (
+              <Button type="button" onClick={activate} disabled={busy}>
+                Activate (human approval)
+              </Button>
+            )}
+            {c.deliveryStatus === 'active' && (
+              <Button asChild variant="outline">
+                <Link to="/missions/new">Launch OL-001 mission</Link>
+              </Button>
+            )}
+          </div>
+
+          {(canProvision || canStartProvisioning || canActivate || c.deliveryStatus === 'active') && (
+            <div className="grid gap-2 sm:grid-cols-2 text-sm">
+              <div className="space-y-1.5">
+                <Label htmlFor="ghlLoc">GHL location id (probe)</Label>
+                <Input
+                  id="ghlLoc"
+                  className="font-mono"
+                  value={ghlLocationId}
+                  onChange={(e) => setGhlLocationId(e.target.value)}
+                  placeholder="loc_…"
+                  disabled={!canProvision && !canStartProvisioning}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="modelProv">Model provider (probe)</Label>
+                <Input
+                  id="modelProv"
+                  className="font-mono"
+                  value={modelProvider}
+                  onChange={(e) => setModelProvider(e.target.value)}
+                  placeholder="openai | anthropic | …"
+                  disabled={!canProvision && !canStartProvisioning}
+                />
+              </div>
+            </div>
+          )}
+
+          <ul className="text-sm space-y-3">
             {(c.provisioning?.steps ?? []).map((s) => (
-              <li key={s.key} className="flex gap-2">
-                <span className="font-mono w-40 shrink-0">{s.key}</span>
-                <span className="font-mono">{s.status}</span>
+              <li
+                key={s.key}
+                className="border border-border/60 rounded-md p-3 space-y-2"
+              >
+                <div className="flex flex-wrap gap-2 items-baseline">
+                  <span className="font-mono">{s.key}</span>
+                  <span className="font-mono text-xs">{s.status}</span>
+                  {s.completedBy && (
+                    <span className="text-xs text-muted-foreground">
+                      by {s.completedBy}
+                    </span>
+                  )}
+                </div>
                 {s.blockReason && (
-                  <span className="text-muted-foreground truncate">{s.blockReason}</span>
+                  <p className="text-xs text-muted-foreground">{s.blockReason}</p>
+                )}
+                {s.evidence && (
+                  <p className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
+                    {s.evidence}
+                  </p>
+                )}
+                {canProvision && s.status !== 'verified' && (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Evidence (required to verify)"
+                      value={stepEvidence[s.key] ?? ''}
+                      onChange={(e) =>
+                        setStepEvidence((prev) => ({
+                          ...prev,
+                          [s.key]: e.target.value,
+                        }))
+                      }
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => verifyStep(s.key)}
+                        disabled={busy}
+                      >
+                        Verify
+                      </Button>
+                      {(s.key === 'ghl_connection' || s.key === 'model_access') && (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              probeStep(
+                                s.key as 'ghl_connection' | 'model_access',
+                                false,
+                              )
+                            }
+                            disabled={busy}
+                          >
+                            Probe
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              probeStep(
+                                s.key as 'ghl_connection' | 'model_access',
+                                true,
+                              )
+                            }
+                            disabled={busy}
+                          >
+                            Probe + apply
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </li>
             ))}
