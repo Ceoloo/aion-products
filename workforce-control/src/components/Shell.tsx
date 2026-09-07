@@ -21,21 +21,21 @@ export function Shell({
     <div className="min-h-full flex flex-col">
       <header className="relative border-b border-border/80 backdrop-blur-sm">
         <div className="pointer-events-none absolute inset-0 ops-grid opacity-40" />
-        <div className="relative container flex h-14 items-center justify-between gap-4">
-          <div className="flex items-center gap-6 min-w-0">
+        <div className="relative container flex h-14 items-center justify-between gap-3 xl:gap-4">
+          <div className="flex items-center gap-4 xl:gap-6 min-w-0">
             <Link to="/" className="font-display text-lg tracking-tight text-foreground shrink-0">
               AION
-              <span className="ml-2 text-xs font-sans font-normal uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="ml-2 hidden xl:inline text-xs font-sans font-normal uppercase tracking-[0.18em] text-muted-foreground">
                 Operator
               </span>
             </Link>
-            <nav className="hidden md:flex items-center gap-1 text-sm">
+            <nav className="hidden lg:flex items-center gap-1 text-sm">
               <NavLink
                 to="/"
                 end
                 className={({ isActive }) =>
                   cn(
-                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 text-muted-foreground hover:text-foreground',
                     isActive && 'bg-secondary text-foreground',
                   )
                 }
@@ -47,7 +47,7 @@ export function Shell({
                 to="/ol001"
                 className={({ isActive }) =>
                   cn(
-                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 text-muted-foreground hover:text-foreground',
                     isActive && 'bg-secondary text-foreground',
                   )
                 }
@@ -59,7 +59,7 @@ export function Shell({
                 to="/implementations"
                 className={({ isActive }) =>
                   cn(
-                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 text-muted-foreground hover:text-foreground',
                     isActive && 'bg-secondary text-foreground',
                   )
                 }
@@ -72,7 +72,7 @@ export function Shell({
                 end
                 className={({ isActive }) =>
                   cn(
-                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0 text-muted-foreground hover:text-foreground',
                     isActive && 'bg-secondary text-foreground',
                   )
                 }
@@ -97,7 +97,7 @@ export function Shell({
               list="tenant-presets"
               value={tenantId}
               onChange={(e) => setTenantId(e.target.value.trim())}
-              className="h-8 w-36 font-mono text-xs"
+              className="h-8 w-28 xl:w-36 font-mono text-xs"
               title={`x-aion-tenant-id → ${RuntimeApi.runtimeUrl}`}
             />
             <datalist id="tenant-presets">
