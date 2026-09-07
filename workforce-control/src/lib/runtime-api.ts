@@ -136,4 +136,22 @@ export const RuntimeApi = {
       body: JSON.stringify(body),
     });
   },
+
+  /**
+   * Launch a mission via the canonical Runtime contract (same as proofs).
+   * UI must not invent a parallel execution path.
+   */
+  runMission(tenantId: string, body: Record<string, unknown>) {
+    return request<{
+      status: string;
+      rootExecutionId?: string;
+      stoppedAtStep?: number | null;
+      steps?: unknown[];
+      mission?: Mission;
+      workflow?: { workflowId?: string; name?: string; version?: string };
+    }>('/v1/missions/run', tenantId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
 };

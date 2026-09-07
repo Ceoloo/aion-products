@@ -121,7 +121,11 @@ export default function HoldingOverview() {
         </h1>
         <p className="mt-3 max-w-xl text-sm md:text-base text-muted-foreground">
           Holding view of the machine workforce. Metrics resolve from Runtime
-          economics — never invented dashboard state. Operate missions from{' '}
+          economics — never invented dashboard state. Cohort heartbeat:{' '}
+          <Link className="text-primary underline-offset-2 hover:underline" to="/ol001">
+            OL-001 scoreboard
+          </Link>
+          . Operate missions from{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/missions">
             Mission Control
           </Link>
