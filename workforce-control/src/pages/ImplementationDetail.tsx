@@ -588,6 +588,14 @@ export default function ImplementationDetail() {
                   v{String(c.blueprint.version)} · {String(c.blueprint.status)} ·{' '}
                   {String(c.blueprint.packageKey)}
                 </div>
+                {c.blueprint.secureAutomation && (
+                  <div className="text-muted-foreground">
+                    Secure Automation {String(c.blueprint.secureAutomation.standardId)}{' '}
+                    v{String(c.blueprint.secureAutomation.standardVersion)} ·{' '}
+                    {String(c.blueprint.secureAutomation.workflowId)}@
+                    {String(c.blueprint.secureAutomation.workflowVersion)}
+                  </div>
+                )}
                 {c.blueprint.approvedBy && (
                   <div>
                     approved by {c.blueprint.approvedBy} at {c.blueprint.approvedAt}
