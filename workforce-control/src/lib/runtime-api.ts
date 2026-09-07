@@ -8,6 +8,7 @@ import type {
   ApprovalRequest,
   EconomicsRollup,
   ExecutionObject,
+  ImplementationCase,
   Mission,
 } from './types';
 
@@ -153,5 +154,83 @@ export const RuntimeApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  // ── IE-001 Implementation Engine ────────────────────────────────────────
+
+  listImplementations(tenantId: string, deliveryStatus?: string) {
+    const qs = deliveryStatus
+      ? `?deliveryStatus=${encodeURIComponent(deliveryStatus)}`
+      : '';
+    return request<{ cases: ImplementationCase[]; count: number }>(
+      `/v1/implementations${qs}`,
+      tenantId,
+    );
+  },
+
+  getImplementation(tenantId: string, caseId: string) {
+    return request<{ case: ImplementationCase }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}`,
+      tenantId,
+    );
+  },
+
+  createImplementation(
+    tenantId: string,
+    body: {
+      clientRef: string;
+      clientName: string;
+      ownerId: string;
+      commercialStatus?: string;
+      nextAction?: string;
+    },
+  ) {
+    return request<{ case: ImplementationCase }>('/v1/implementations', tenantId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  submitImplementationIntake(
+    tenantId: string,
+    caseId: string,
+    body: Record<string, unknown>,
+  ) {
+    return request<{
+      case: ImplementationCase;
+      recommendation?: ImplementationCase['recommendation'];
+    }>(`/v1/implementations/${encodeURIComponent(caseId)}/intake`, tenantId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  draftImplementationBlueprint(
+    tenantId: string,
+    caseId: string,
+    body: Record<string, unknown>,
+  ) {
+    return request<{
+      case: ImplementationCase;
+      blueprint?: ImplementationCase['blueprint'];
+    }>(`/v1/implementations/${encodeURIComponent(caseId)}/blueprint`, tenantId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  approveImplementationBlueprint(
+    tenantId: string,
+    caseId: string,
+    body: { approvedBy: string },
+  ) {
+    return request<{
+      case: ImplementationCase;
+      blueprint?: ImplementationCase['blueprint'];
+    }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}/blueprint/approve`,
+      tenantId,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
   },
 };

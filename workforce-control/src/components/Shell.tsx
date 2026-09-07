@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, Plus, ShieldAlert, Target } from 'lucide-react';
+import { Briefcase, LayoutDashboard, ListChecks, Plus, ShieldAlert, Target } from 'lucide-react';
 import { PRESETS, useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
 import { cn } from '@/lib/utils';
@@ -54,6 +54,18 @@ export function Shell({
               >
                 <Target className="h-3.5 w-3.5" />
                 OL-001
+              </NavLink>
+              <NavLink
+                to="/implementations"
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    isActive && 'bg-secondary text-foreground',
+                  )
+                }
+              >
+                <Briefcase className="h-3.5 w-3.5" />
+                IE-001
               </NavLink>
               <NavLink
                 to="/missions"
