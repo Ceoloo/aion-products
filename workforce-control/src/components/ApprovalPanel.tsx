@@ -9,6 +9,31 @@ import { Link } from 'react-router-dom';
 const DECIDED_BY =
   (import.meta.env.VITE_AION_OPERATOR_ID as string | undefined) ?? 'operator-console';
 
+/** Human actor stamped on every Console approval decision (satisfies actors FK). */
+function consoleApproverActor(tenantId: string) {
+  return {
+    actorType: 'human' as const,
+    actorId: DECIDED_BY,
+    name: 'Operator Console Approver',
+    email: 'operator-console@aion.local',
+    permissions: [
+      'crm.opportunity.update',
+      'crm.contact.update',
+      'crm.note.create',
+      'crm.task.create',
+      'crm.message.send',
+    ],
+    maxRiskLevel: 'R3',
+    tenantId,
+    companyId: 'co_aion',
+    metadata: {
+      source: 'operator-console',
+      cohort: 'pre_ol_validation',
+      productionEconomic: false,
+    },
+  };
+}
+
 /**
  * Approval queue — inspect + decide via Runtime POST /v1/approvals/:id/decision.
  * UI is not the authority; every Approve/Deny is a governed capability call.
@@ -42,7 +67,10 @@ export function ApprovalPanel({
       await RuntimeApi.decideApproval(tenantId, approvalId, {
         approve,
         decidedBy: DECIDED_BY,
-        note: approve ? 'approved via Operator Console' : 'denied via Operator Console',
+        note: approve
+          ? 'approved via Operator Console'
+          : 'denied via Operator Console',
+        actor: consoleApproverActor(tenantId),
       });
       onDecided?.();
     } catch (err: unknown) {

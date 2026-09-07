@@ -120,12 +120,18 @@ export const RuntimeApi = {
 
   /**
    * Governed human gate — UI never invents authority; Runtime decides.
-   * Body: { approve, decidedBy, note? }
+   * Body must include a full human `actor` matching `decidedBy` so
+   * `approvals.decided_by` FK / attribution stay coherent.
    */
   decideApproval(
     tenantId: string,
     approvalId: string,
-    body: { approve: boolean; decidedBy: string; note?: string },
+    body: {
+      approve: boolean;
+      decidedBy: string;
+      note?: string;
+      actor: Record<string, unknown>;
+    },
   ) {
     return request<{
       status: string;
