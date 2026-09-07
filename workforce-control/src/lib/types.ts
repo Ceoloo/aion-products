@@ -86,3 +86,48 @@ export interface ApprovalRequest {
   expiresAt?: string;
   consumedAt?: string;
 }
+
+/** IE-001 — mirrors Runtime ImplementationCase. */
+export interface ImplementationCase {
+  caseId: string;
+  tenantId: string;
+  clientRef: string;
+  clientName: string;
+  ownerId: string;
+  commercialStatus: string;
+  deliveryStatus: string;
+  nextAction?: string;
+  blockers?: string[];
+  evidenceLinks?: Array<{ label: string; url?: string; note?: string }>;
+  intake?: Record<string, unknown>;
+  recommendation?: {
+    outcome: string;
+    recommendedPackage?: string;
+    rationale: string;
+    exclusions?: string[];
+    missingInputs?: string[];
+    readinessGates?: Record<string, boolean>;
+    requiresHumanReview?: boolean;
+    humanOverridePackage?: string;
+    humanNotes?: string;
+  };
+  blueprint?: Record<string, unknown> & {
+    version?: number;
+    status?: string;
+    packageKey?: string;
+    approvedBy?: string;
+    approvedAt?: string;
+  };
+  provisioning?: {
+    steps?: Array<{
+      key: string;
+      status: string;
+      blockReason?: string;
+      evidence?: string;
+      completedBy?: string;
+    }>;
+  };
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+}
