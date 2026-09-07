@@ -54,6 +54,26 @@ jobs:
         working-directory: web
         run: npm run build
 
+  workforce-control:
+    name: workforce control center (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: install workforce-control deps
+        working-directory: workforce-control
+        run: npm ci
+      - name: typecheck workforce-control
+        working-directory: workforce-control
+        run: npm run typecheck
+      - name: build workforce-control
+        working-directory: workforce-control
+        run: npm run build
+
   synthetic-mission-eval:
     # Named to make it impossible to mistake a green run for production
     # validation. This exercises the Mission-001 gates against SYNTHETIC
