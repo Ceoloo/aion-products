@@ -14,7 +14,8 @@
     "demo": "node src/cli/demo.ts",
     "demo:contractor": "node src/cli/demo.ts --fixture contractor-estimate-call",
     "demo:funding": "node src/cli/demo.ts --fixture funding-discovery-call",
-    "eval": "node src/cli/evaluate.ts"
+    "eval": "node src/cli/evaluate.ts",
+    "validate": "node src/cli/validate.ts"
   },
   "keywords": [
     "aion",

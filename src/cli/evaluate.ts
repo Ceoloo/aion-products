@@ -7,20 +7,10 @@
  */
 
 import { runEval } from '../eval/evaluate.ts';
+import { computeGates, pct } from '../eval/gates.ts';
 import { detectProvider } from '../platform/provider-adapter.ts';
 import { h1 } from './format.ts';
 
-const GATES = {
-  extractionAccuracy: 0.85,
-  objectionAccuracy: 0.85,
-  conversionEvents: 10,
-  meaningfulConversions: 3,
-  repValueRate: 0.6,
-};
-
-function pct(n: number): string {
-  return `${(n * 100).toFixed(1)}%`;
-}
 function pass(ok: boolean): string {
   return ok ? 'PASS ✅' : 'FAIL ❌';
 }
@@ -42,22 +32,14 @@ async function main(): Promise<void> {
     if (misses.length) console.log(`      misses: ${misses.map((m) => `${m.key}(got:${m.extractedValue ?? 'none'})`).join(', ')}`);
   }
 
-  const gateResults: [string, boolean, string][] = [
-    ['Live extraction accuracy (≥85% on clearly-stated facts)', agg.extractionAccuracy >= GATES.extractionAccuracy, `${pct(agg.extractionAccuracy)} (${agg.correctFactChecks}/${agg.totalFactChecks})`],
-    ['Objection detection accuracy (≥85%)', agg.objectionAccuracy >= GATES.objectionAccuracy, pct(agg.objectionAccuracy)],
-    ['Stage-outcome correctness (advance + meaningful vs label)', agg.stageOutcomeCorrect === agg.stageOutcomeTotal, `${agg.stageOutcomeCorrect}/${agg.stageOutcomeTotal}`],
-    ['Conversion events (≥10 across calls)', agg.totalConversionEvents >= GATES.conversionEvents, `${agg.totalConversionEvents}`],
-    ['Meaningful conversions (≥3 calls)', agg.meaningfulConversions >= GATES.meaningfulConversions, `${agg.meaningfulConversions}`],
-    ['Rep-value (≥60% of rated interventions useful/acted)', (agg.repValueRate ?? 0) >= GATES.repValueRate, `${agg.repValueRate === null ? 'n/a' : pct(agg.repValueRate)} (${agg.interventionsValuable}/${agg.interventionsRated} rated; ${agg.interventionsSurfaced} surfaced)`],
-    ['Learning lineage complete (context→state→rec→feedback→response→movement)', agg.lineageComplete, agg.lineageComplete ? 'yes' : 'no'],
-  ];
+  const gateResults = computeGates(agg);
 
   console.log(h1('GATE SCORECARD'));
-  for (const [name, ok, detail] of gateResults) {
-    console.log(`  ${pass(ok)}  ${name}\n            → ${detail}`);
+  for (const g of gateResults) {
+    console.log(`  ${pass(g.pass)}  ${g.label}\n            → ${g.detail}`);
   }
 
-  const allPass = gateResults.every(([, ok]) => ok);
+  const allPass = gateResults.every((g) => g.pass);
   console.log(`\n  OVERALL: ${allPass ? 'ALL GATES PASS ✅' : 'SOME GATES NOT MET ❌'}`);
   console.log('\n  Note: production validation requires ≥25 real sales conversations (docs/GATES.md).');
   console.log('  The fixture set is a synthetic offline harness proving the loop and gate instrumentation.');

@@ -43,3 +43,23 @@ jobs:
       - run: npm ci
       - name: run synthetic Mission-001 gate scorecard
         run: npm run eval
+
+  production-validation-status:
+    # INFORMATIONAL, not a gate. Reports how many real, consented conversations
+    # have been ingested toward the MISSION-001 exit gate (>=25). It runs in
+    # --status mode so it always exits 0 — it surfaces "X / 25, NOT YET
+    # VALIDATED" without failing the build while real-world validation is in
+    # progress. Real call data is gitignored, so in CI this reports 0 / 25 until
+    # validation begins. It can NEVER pass on synthetic data.
+    name: production validation status (informational, NOT a gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: bootstrap @aion/core
+        run: npm run setup:core
+      - run: npm ci
+      - name: report production-validation status
+        run: npm run validate -- --status

@@ -10,3 +10,8 @@ coverage/
 
 # Vendored, built @aion/core (bootstrapped via scripts/setup-core.sh)
 .vendor/
+
+# Real sales-call intake data — never commit real conversations / PII.
+# Only the README and the template are tracked (see validation/real-calls/README.md).
+/validation/real-calls/*.call.ts
+!/validation/real-calls/_template.call.ts

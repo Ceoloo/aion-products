@@ -158,9 +158,18 @@ function lastProspectTurn(fixture: CallFixture): number {
   return prospectTurns.length ? prospectTurns[prospectTurns.length - 1]!.index : -1;
 }
 
-export async function runEval(opts: EvalOptions = {}): Promise<EvalAggregate> {
+/**
+ * Scores an arbitrary set of labeled calls against the Mission-001 gates. The
+ * synthetic fixtures and real production calls share the same `CallFixture`
+ * shape, so this one scorer serves both `runEval` (synthetic) and the
+ * production-validation harness (real calls) — the gate logic never forks.
+ */
+export async function evaluateCalls(
+  calls: CallFixture[],
+  opts: EvalOptions = {},
+): Promise<EvalAggregate> {
   const fixtures: FixtureEval[] = [];
-  for (const f of FIXTURES) fixtures.push(await evalFixture(f, opts));
+  for (const f of calls) fixtures.push(await evalFixture(f, opts));
 
   const totalFactChecks = fixtures.reduce((s, f) => s + f.factChecks.length, 0);
   const correctFactChecks = fixtures.reduce((s, f) => s + f.factChecks.filter((c) => c.correct).length, 0);
@@ -191,6 +200,11 @@ export async function runEval(opts: EvalOptions = {}): Promise<EvalAggregate> {
     interventionsRated,
     interventionsValuable,
     repValueRate: interventionsRated ? interventionsValuable / interventionsRated : null,
-    lineageComplete: fixtures.every((f) => f.lineageComplete),
+    lineageComplete: fixtures.length > 0 && fixtures.every((f) => f.lineageComplete),
   };
+}
+
+/** Scores the bundled synthetic fixture set (the offline engineering gate). */
+export async function runEval(opts: EvalOptions = {}): Promise<EvalAggregate> {
+  return evaluateCalls(FIXTURES, opts);
 }
