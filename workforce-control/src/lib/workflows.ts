@@ -20,13 +20,13 @@ export interface WorkflowTemplate {
   }>;
 }
 
-/** OL-001 default — research → enrich → GHL upsert (proven M004/M006 path). */
+/** Default revenue workflow — usable in PRE-OL validation; OL-001 credit only when gates clear. */
 export const REVENUE_PRODUCTION_V1: WorkflowTemplate = {
   id: 'revenue-production-v1',
   label: 'Revenue Production v1',
   version: '1.0.0',
   description:
-    'OL-001 cohort workflow: lead research → enrichment → GHL contact upsert.',
+    'Lead research → enrichment → GHL contact upsert. PRE-OL by default until live GHL+model gates clear.',
   owner: 'revenue',
   permissions: [
     'revenue.lead.research',

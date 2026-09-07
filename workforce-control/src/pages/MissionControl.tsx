@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { ApprovalPanel } from '@/components/ApprovalPanel';
 import { useTenant } from '@/hooks/useTenant';
+import { missionCohortLabel } from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { ApprovalRequest, EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
@@ -192,6 +193,12 @@ export default function MissionControl() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {missionCohortLabel(m) === 'PRE-OL' && (
+                      <Badge variant="outline">PRE-OL</Badge>
+                    )}
+                    {missionCohortLabel(m) === 'OL-001' && (
+                      <Badge variant="outline">OL-001</Badge>
+                    )}
                     <Badge variant="secondary">{m.status}</Badge>
                     <span className="font-mono text-[0.65rem] text-muted-foreground">
                       {exes.length} exe
