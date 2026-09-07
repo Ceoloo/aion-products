@@ -233,4 +233,77 @@ export const RuntimeApi = {
       { method: 'POST', body: JSON.stringify(body) },
     );
   },
+
+  // ── IE-002 Provisioning + Activation ────────────────────────────────────
+
+  startImplementationProvisioning(
+    tenantId: string,
+    caseId: string,
+    body: { startedBy?: string } = {},
+  ) {
+    return request<{ case: ImplementationCase }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}/provisioning/start`,
+      tenantId,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  updateImplementationProvisioningStep(
+    tenantId: string,
+    caseId: string,
+    stepKey: string,
+    body: {
+      status: string;
+      evidence?: string;
+      completedBy?: string;
+      blockReason?: string;
+    },
+  ) {
+    return request<{ case: ImplementationCase }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}/provisioning/steps/${encodeURIComponent(stepKey)}`,
+      tenantId,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  probeImplementationProvisioningStep(
+    tenantId: string,
+    caseId: string,
+    stepKey: string,
+    body: Record<string, unknown>,
+  ) {
+    return request<{
+      case: ImplementationCase;
+      probe?: { step: string; ok: boolean; evidence: string; missing: string[] };
+      hint?: string;
+    }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}/provisioning/steps/${encodeURIComponent(stepKey)}/probe`,
+      tenantId,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  markImplementationActivationReady(
+    tenantId: string,
+    caseId: string,
+    body: { markedBy?: string } = {},
+  ) {
+    return request<{ case: ImplementationCase }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}/activation/ready`,
+      tenantId,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  activateImplementation(
+    tenantId: string,
+    caseId: string,
+    body: { approvedBy: string },
+  ) {
+    return request<{ case: ImplementationCase }>(
+      `/v1/implementations/${encodeURIComponent(caseId)}/activate`,
+      tenantId,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
 };
