@@ -97,7 +97,18 @@ export class AiExecutionService implements AiExecutor {
     this.crmWriteConfidence = cfg.crmWriteConfidence ?? 0.85;
     this.autoWriteInferredFacts = cfg.autoWriteInferredFacts ?? false;
 
-    const model = cfg.model ?? process.env.AION_MODEL ?? 'claude-opus-4-8';
+    // Model resolution is provider-aware so the default is valid for whichever
+    // runtime is active. OpenRouter uses namespaced slugs (e.g.
+    // "anthropic/claude-3.5-sonnet"); the Anthropic SDK uses bare ids. An
+    // explicit `cfg.model` or `AION_MODEL` overrides either. This keeps the
+    // Anthropic/deterministic behavior byte-for-byte unchanged.
+    const isOpenRouter = llm?.name === 'openrouter';
+    const model =
+      cfg.model ??
+      process.env.AION_MODEL ??
+      (isOpenRouter
+        ? process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet'
+        : 'claude-opus-4-8');
     const effort = cfg.effort ?? (process.env.AION_EFFORT as Effort) ?? 'medium';
     const maxTokens = cfg.maxTokens ?? 1536;
 

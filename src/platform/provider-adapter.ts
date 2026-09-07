@@ -15,6 +15,9 @@
 import type { ExecutionAdapter, ExecutionRequest } from '@aion/core';
 import type { ExecutionResult } from '@aion/core';
 import type { AiTask } from './revenue-ai-tasks.ts';
+// Value import (not a type): the reverse import in openrouter.ts is `import
+// type` and is erased at runtime, so there is no runtime cycle.
+import { OpenRouterProvider } from './providers/openrouter.ts';
 
 export type Effort = 'low' | 'medium' | 'high';
 
@@ -80,10 +83,33 @@ export class AnthropicProvider implements LlmProvider {
   }
 }
 
-/** Detect a provider from the environment; null → deterministic execution. */
+/**
+ * Detect a provider from the environment; null → deterministic execution.
+ *
+ * Selection:
+ *  - `AION_LLM_PROVIDER=openrouter|anthropic` pins a provider explicitly (and
+ *    yields null if that provider's key is absent, rather than silently using
+ *    the other one).
+ *  - otherwise, whichever key is present is used; if both are, OpenRouter wins
+ *    (the router is the more general default). Existing deployments that set
+ *    only `ANTHROPIC_API_KEY` are unaffected.
+ *  - no key → null → the governed deterministic path.
+ */
 export function detectProvider(): LlmProvider | null {
-  const key = process.env.ANTHROPIC_API_KEY;
-  return key && key.trim().length > 0 ? new AnthropicProvider(key.trim()) : null;
+  const choice = process.env.AION_LLM_PROVIDER?.trim().toLowerCase();
+  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+
+  if (choice === 'openrouter') {
+    return openRouterKey ? new OpenRouterProvider(openRouterKey) : null;
+  }
+  if (choice === 'anthropic') {
+    return anthropicKey ? new AnthropicProvider(anthropicKey) : null;
+  }
+
+  if (openRouterKey) return new OpenRouterProvider(openRouterKey);
+  if (anthropicKey) return new AnthropicProvider(anthropicKey);
+  return null;
 }
 
 export interface RevenueAdapterDeps {

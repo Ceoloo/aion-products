@@ -3,7 +3,10 @@
 - **Drives:** adding OpenRouter as a model option behind the existing
   vendor-neutral execution adapter
 - **Priority:** per-mission (additive; deterministic path already works keyless)
-- **Status:** Design — code sketch, not yet implemented
+- **Status:** **Implemented** — `src/platform/providers/openrouter.ts`,
+  `detectProvider()` selection, provider-aware model default in
+  `ai-execution.ts`, and `test/openrouter.test.ts` (fake `fetch`, keyless CI).
+  Deployment on the VPS still requires a consuming service in the Compose stack.
 
 The Revenue Copilot already treats the model provider as an **execution
 adapter**, not the authority: `src/platform/provider-adapter.ts` defines an
@@ -93,9 +96,13 @@ export function detectProvider(): LlmProvider | null {
 }
 ```
 
-The default model comes from `OPENROUTER_MODEL` (config, not secret); the
-`RevenueExecutionAdapter` already carries `model` in its deps, so only the
-wiring that constructs the adapter reads that env var.
+The default model is **provider-aware** (`ai-execution.ts`): an explicit
+`cfg.model` or `AION_MODEL` always wins; otherwise, when the active provider is
+OpenRouter, the default is `OPENROUTER_MODEL` (config, not secret) or, if unset,
+the widely-available slug `anthropic/claude-3.5-sonnet` — never the bare
+Anthropic id, which OpenRouter would reject. The Anthropic/deterministic default
+(`claude-opus-4-8`) is unchanged. Set `OPENROUTER_MODEL` to any OpenRouter model
+slug to override.
 
 ## Governance & economics carry through unchanged
 
