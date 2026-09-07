@@ -56,6 +56,7 @@ export { AiExecutionService } from './platform/ai-execution.ts';
 export type { AiExecutor, AiExecResult } from './platform/ai-execution.ts';
 export { detectProvider, AnthropicProvider, RevenueExecutionAdapter } from './platform/provider-adapter.ts';
 export type { LlmProvider } from './platform/provider-adapter.ts';
+export { OpenRouterProvider } from './platform/providers/openrouter.ts';
 export { LiveCopilot } from './pipeline/copilot.ts';
 export { buildReport } from './pipeline/report.ts';
 export { getSchema, listSchemas } from './config/registry.ts';

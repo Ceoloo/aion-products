@@ -27,7 +27,8 @@ function pass(ok: boolean): string {
 
 async function main(): Promise<void> {
   const agg = await runEval();
-  const path = detectProvider() ? 'Claude (governed)' : 'deterministic (no key)';
+  const provider = detectProvider();
+  const path = provider ? `${provider.name} (governed)` : 'deterministic (no key)';
 
   console.log(h1('AION REVENUE COPILOT — MISSION-001 EVALUATION'));
   console.log(`  AI path: ${path}   Fixtures: ${agg.fixtures.length}`);
