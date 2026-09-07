@@ -121,11 +121,13 @@ export default function HoldingOverview() {
         </h1>
         <p className="mt-3 max-w-xl text-sm md:text-base text-muted-foreground">
           Holding view of the machine workforce. Metrics resolve from Runtime
-          economics — never invented dashboard state. Cohort heartbeat:{' '}
+          economics — never invented dashboard state. Current phase:{' '}
+          <strong className="font-medium text-foreground">PRE-OL validation</strong>{' '}
+          (OL-001 paused). Cohort heartbeat stays honest at{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/ol001">
             OL-001 scoreboard
-          </Link>
-          . Operate missions from{' '}
+          </Link>{' '}
+          (0 / 100 until productionEconomic missions). Operate from{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/missions">
             Mission Control
           </Link>
@@ -141,7 +143,7 @@ export default function HoldingOverview() {
 
       <section className="mb-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
         <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Operating leverage
+          Operating leverage (tenant aggregate — includes PRE-OL)
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
           <MetricLink label="Throughput (missions)" value={missions.length} to="/missions" />

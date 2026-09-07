@@ -3,12 +3,15 @@ import { Link, useParams } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { MetricLink } from '@/components/MetricLink';
 import { useTenant } from '@/hooks/useTenant';
+import { missionCohortLabel } from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 
 /**
  * Mission Detail — economics + lineage from API only.
+ * Inspect checklist: objective, workflow, executions, agent/tenant, I/O,
+ * approvals, policy, cost, terminal outcome — all from Runtime records.
  */
 export default function MissionDetail() {
   const { missionId = '' } = useParams();
@@ -95,9 +98,39 @@ export default function MissionDetail() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{mission.status}</Badge>
             {mission.riskLevel && <Badge variant="outline">{mission.riskLevel}</Badge>}
+            {missionCohortLabel(mission) === 'PRE-OL' && (
+              <Badge variant="outline">PRE-OL</Badge>
+            )}
+            {missionCohortLabel(mission) === 'OL-001' && (
+              <Badge variant="outline">OL-001</Badge>
+            )}
             <span className="font-mono text-xs text-muted-foreground">{mission.missionId}</span>
           </div>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">{mission.objective}</p>
+          {mission.metadata && (
+            <dl className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div>
+                <dt className="text-muted-foreground">cohort</dt>
+                <dd className="font-mono">{String(mission.metadata.cohort ?? '—')}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">productionEconomic</dt>
+                <dd className="font-mono">
+                  {String(mission.metadata.productionEconomic ?? '—')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">workflow</dt>
+                <dd className="font-mono truncate">
+                  {String(mission.metadata.workflowTemplateId ?? '—')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">owner</dt>
+                <dd className="font-mono truncate">{mission.owner}</dd>
+              </div>
+            </dl>
+          )}
         </header>
       )}
 
