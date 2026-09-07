@@ -13,7 +13,9 @@ calls a governed Runtime capability — the UI is never the business-logic layer
 | Route | Role |
 |---|---|
 | `/` | **Command Center** — holding OL scoreboard, portfolio, mission health, economics |
+| `/ol001` | **OL-001 scoreboard** — 100-mission heartbeat (pipeline ≠ attributed ≠ collected) |
 | `/missions` | **Mission Control** — filter active/completed/failed, inspect entry points |
+| `/missions/new` | **Launch** — `POST /v1/missions/run` (canonical contract, versioned workflows) |
 | `/missions/:id` | Mission detail — economics + lineage |
 | `/executions/:id` | Execution object — agent, tenant/company scope, service, tree |
 | Approvals panel | Inspect + **Approve / Deny** via `POST /v1/approvals/:id/decision` |
@@ -59,9 +61,8 @@ From repo root:
 - `npm run workforce:build`
 - `npm run workforce:typecheck`
 
-## Next slices
+## Next slices (friction-driven)
 
-- Create mission from business objective (`POST /v1/missions/run`)
-- Retry allowed failed operations
-- Workforce Hub (autonomy grants, scorecards)
-- Client Ops UI (GHL-facing; AION remains governance truth)
+- Policy-aware retry (refuse when side effects may not be idempotent)
+- Console v2 from OL-001 operator behavior
+- Do **not** start OL-002 until 100/100 baseline exists

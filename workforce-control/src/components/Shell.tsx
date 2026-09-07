@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Plus, ShieldAlert, Target } from 'lucide-react';
 import { PRESETS, useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
 import { cn } from '@/lib/utils';
@@ -22,14 +22,14 @@ export function Shell({
       <header className="relative border-b border-border/80 backdrop-blur-sm">
         <div className="pointer-events-none absolute inset-0 ops-grid opacity-40" />
         <div className="relative container flex h-14 items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <Link to="/" className="font-display text-lg tracking-tight text-foreground">
+          <div className="flex items-center gap-6 min-w-0">
+            <Link to="/" className="font-display text-lg tracking-tight text-foreground shrink-0">
               AION
               <span className="ml-2 text-xs font-sans font-normal uppercase tracking-[0.18em] text-muted-foreground">
                 Operator
               </span>
             </Link>
-            <nav className="hidden sm:flex items-center gap-1 text-sm">
+            <nav className="hidden md:flex items-center gap-1 text-sm">
               <NavLink
                 to="/"
                 end
@@ -44,7 +44,20 @@ export function Shell({
                 Command
               </NavLink>
               <NavLink
+                to="/ol001"
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    isActive && 'bg-secondary text-foreground',
+                  )
+                }
+              >
+                <Target className="h-3.5 w-3.5" />
+                OL-001
+              </NavLink>
+              <NavLink
                 to="/missions"
+                end
                 className={({ isActive }) =>
                   cn(
                     'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
@@ -57,7 +70,13 @@ export function Shell({
               </NavLink>
             </nav>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <Button asChild size="sm" className="gap-1.5 hidden sm:inline-flex">
+              <Link to="/missions/new">
+                <Plus className="h-3.5 w-3.5" />
+                New Mission
+              </Link>
+            </Button>
             <label className="sr-only" htmlFor="tenant">
               Tenant
             </label>
@@ -66,7 +85,7 @@ export function Shell({
               list="tenant-presets"
               value={tenantId}
               onChange={(e) => setTenantId(e.target.value.trim())}
-              className="h-8 w-40 font-mono text-xs"
+              className="h-8 w-36 font-mono text-xs"
               title={`x-aion-tenant-id → ${RuntimeApi.runtimeUrl}`}
             />
             <datalist id="tenant-presets">

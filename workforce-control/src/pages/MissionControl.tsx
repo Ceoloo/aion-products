@@ -119,7 +119,11 @@ export default function MissionControl() {
         </h1>
         <p className="mt-3 max-w-xl text-sm text-muted-foreground">
           Filter, inspect lineage, economics, and failures. Approve gated actions
-          through Runtime — never invent authority in the UI.
+          through Runtime — never invent authority in the UI.{' '}
+          <Link className="text-primary underline-offset-2 hover:underline" to="/missions/new">
+            Launch a mission
+          </Link>
+          .
         </p>
         {loading && (
           <p className="mt-4 text-sm text-muted-foreground animate-pulse-soft">Loading…</p>
