@@ -9,6 +9,7 @@ around it, and never fork a canonical definition
 | Spec | Drives | Priority | Status |
 |---|---|---|---|
 | [agent-economics-consumption.md](agent-economics-consumption.md) | [ADR-004](https://github.com/Ceoloo/aion-docs/blob/main/adr/ADR-004-agent-economics-layer.md) | P0 align / Phase-5 build | Design |
+| [openrouter-provider.md](openrouter-provider.md) | OpenRouter as an `LlmProvider` behind the existing execution adapter | per-mission | Design |
 
 ## Ground rules
 
