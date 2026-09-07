@@ -10,7 +10,8 @@
   "scripts": {
     "setup:core": "bash scripts/setup-core.sh",
     "typecheck": "tsc --noEmit",
-    "test": "node --test",
+    "test": "node --experimental-strip-types --test 'test/**/*.test.ts'",
+    "serve": "node --experimental-strip-types src/server.ts",
     "console": "node src/server/app.ts",
     "preflight": "node src/cli/preflight.ts",
     "golive": "bash scripts/golive.sh",
