@@ -72,14 +72,26 @@ export default function ExecutionDetail() {
         ],
         ['cost', execution.cost?.units != null ? `${execution.cost.units} units` : '—'],
         ['agentUri', execution.agentUri ?? '—'],
+        ['actorId', execution.actorId ?? '—'],
         ['domain', execution.domain ?? '—'],
         ['tenantId', execution.tenantId ?? '—'],
+        ['companyId', execution.companyId ?? '—'],
+        ['ventureId', execution.ventureId ?? '—'],
+        ['projectId', execution.projectId ?? '—'],
         ['riskLevel', execution.riskLevel ?? '—'],
         ['autonomyLevel', execution.autonomyLevel ?? '—'],
         ['approvalId', execution.approvalId ?? '—'],
         ['runId', execution.runId ?? '—'],
         ['requestId', execution.requestId ?? '—'],
         ['commandId', execution.commandId ?? '—'],
+        [
+          'serviceKey',
+          typeof execution.metadata?.serviceKey === 'string'
+            ? execution.metadata.serviceKey
+            : typeof execution.metadata?.catalogServiceKey === 'string'
+              ? execution.metadata.catalogServiceKey
+              : '—',
+        ],
         [
           'missionId',
           execution.missionId ? (
@@ -128,8 +140,8 @@ export default function ExecutionDetail() {
   return (
     <Shell>
       <div className="mb-6 text-sm flex gap-3">
-        <Link to="/" className="text-muted-foreground hover:text-foreground">
-          ← Holding
+        <Link to="/missions" className="text-muted-foreground hover:text-foreground">
+          ← Mission Control
         </Link>
         {execution?.missionId && (
           <Link

@@ -17,7 +17,7 @@ const PORTFOLIO = [
 ] as const;
 
 /**
- * Holding Overview — every number resolves from Runtime economics / lists.
+ * Command Center (Holding Overview) — OL scoreboard + portfolio health.
  * HARD RULE: no mock KPI generators; empty API → empty state.
  */
 export default function HoldingOverview() {
@@ -29,6 +29,7 @@ export default function HoldingOverview() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +62,7 @@ export default function HoldingOverview() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId]);
+  }, [tenantId, tick]);
 
   const health = useMemo(() => {
     const byStatus = (s: string) => missions.filter((m) => m.status === s).length;
@@ -92,6 +93,18 @@ export default function HoldingOverview() {
     economics && economics.totalExecutions > 0
       ? `${((economics.successCount / economics.totalExecutions) * 100).toFixed(1)}%`
       : null;
+  const interventionRate =
+    economics && economics.totalExecutions > 0
+      ? `${((economics.humanInterventions / economics.totalExecutions) * 100).toFixed(1)}%`
+      : null;
+  const costPerMission =
+    economics && missions.length > 0
+      ? (economics.totalCostUnits / missions.length).toFixed(1)
+      : null;
+  const evPerExe =
+    economics && economics.totalExecutions > 0
+      ? (economics.attributedEconomicValue / economics.totalExecutions).toFixed(2)
+      : null;
 
   return (
     <Shell
@@ -101,14 +114,18 @@ export default function HoldingOverview() {
       <section className="relative mb-10 animate-fade-up">
         <div className="pointer-events-none absolute -inset-x-4 -top-6 h-40 ops-grid opacity-30" />
         <p className="text-[0.7rem] uppercase tracking-[0.22em] text-muted-foreground">
-          Holding overview
+          UX-001 · Command Center
         </p>
         <h1 className="mt-2 font-display text-5xl md:text-6xl font-semibold tracking-tight text-foreground">
           AION
         </h1>
         <p className="mt-3 max-w-xl text-sm md:text-base text-muted-foreground">
-          Machine workforce pane of glass. Metrics resolve from Runtime economics,
-          executions, and approvals — never invented dashboard state.
+          Holding view of the machine workforce. Metrics resolve from Runtime
+          economics — never invented dashboard state. Operate missions from{' '}
+          <Link className="text-primary underline-offset-2 hover:underline" to="/missions">
+            Mission Control
+          </Link>
+          .
         </p>
         {loading && (
           <p className="mt-4 text-sm text-muted-foreground animate-pulse-soft">
@@ -118,6 +135,19 @@ export default function HoldingOverview() {
         {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
       </section>
 
+      <section className="mb-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
+        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          Operating leverage
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+          <MetricLink label="Throughput (missions)" value={missions.length} to="/missions" />
+          <MetricLink label="Success rate" value={successRate} tone="ok" />
+          <MetricLink label="Human intervention rate" value={interventionRate} />
+          <MetricLink label="Cost / mission" value={costPerMission} />
+          <MetricLink label="EV / execution" value={evPerExe} />
+          <MetricLink label="EV / cost (ROI)" value={economics?.roi ?? null} />
+        </div>
+      </section>
       <section className="mb-10 animate-fade-up" style={{ animationDelay: '60ms' }}>
         <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
           Portfolio
@@ -160,10 +190,10 @@ export default function HoldingOverview() {
           Mission health
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          <MetricLink label="Active" value={health.active} to={firstMission ? `/missions/${firstMission}` : undefined} />
-          <MetricLink label="Completed" value={health.completed} to={firstMission ? `/missions/${firstMission}` : undefined} tone="ok" />
-          <MetricLink label="Failed" value={health.failed} to="/?status=failed" tone="danger" />
-          <MetricLink label="Paused" value={health.paused} />
+          <MetricLink label="Active" value={health.active} to="/missions?status=active" />
+          <MetricLink label="Completed" value={health.completed} to="/missions?status=completed" tone="ok" />
+          <MetricLink label="Failed" value={health.failed} to="/missions?status=failed" tone="danger" />
+          <MetricLink label="Paused" value={health.paused} to="/missions?status=paused" />
           <button
             type="button"
             className="block text-left rounded-md border border-border/80 bg-card/60 px-3.5 py-3 transition-colors hover:border-primary/50 hover:bg-accent/40"
@@ -274,7 +304,12 @@ export default function HoldingOverview() {
           <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground">
             Missions
           </h2>
-          <span className="font-mono text-xs text-muted-foreground">{missions.length} from API</span>
+          <Link
+            to="/missions"
+            className="font-mono text-xs text-muted-foreground hover:text-foreground"
+          >
+            Mission Control →
+          </Link>
         </div>
         {missions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -308,6 +343,8 @@ export default function HoldingOverview() {
         approvals={approvals}
         loading={loading}
         error={error}
+        tenantId={tenantId}
+        onDecided={() => setTick((t) => t + 1)}
       />
     </Shell>
   );
