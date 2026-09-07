@@ -103,17 +103,38 @@ export default function NewMission() {
           workflowVersion: template.version,
           budgetUnits: costBudget ?? null,
           autonomy: 'policy-managed',
+          ...(template.secureAutomationStandard
+            ? {
+                secureAutomationStandardId:
+                  template.secureAutomationStandard.standardId,
+                secureAutomationStandardVersion:
+                  template.secureAutomationStandard.standardVersion,
+              }
+            : {}),
         },
       },
       workflow: {
         name: template.label,
         version: template.version,
         description: template.description,
-        steps: template.steps,
+        steps: template.steps
+          .filter((s) => !s.humanOperated)
+          .map(({ name, capability, riskLevel, description }) => ({
+            name,
+            capability,
+            riskLevel,
+            description,
+          })),
         metadata: {
           templateId: template.id,
           cohort: COHORT_PRE_OL,
           productionEconomic: false,
+          humanOperatedSteps: template.steps
+            .filter((s) => s.humanOperated)
+            .map((s) => s.name),
+          ...(template.secureAutomationStandard
+            ? { secureAutomation: template.secureAutomationStandard }
+            : {}),
         },
       },
       metadata: {
@@ -121,10 +142,36 @@ export default function NewMission() {
         productionEconomic: false,
         synthetic: false,
         source: 'operator-console',
+        ...(template.secureAutomationStandard
+          ? { secureAutomation: template.secureAutomationStandard }
+          : {}),
       },
     };
 
-    if (leadEmail.trim()) {
+    if (template.id === 'lead-to-appointment-v1') {
+      body.stepPayloads = {
+        research: { source: 'aion-l2a' },
+        enrich: { source: 'aion-l2a' },
+        opportunity: {
+          provider: 'ghl',
+          name: `L2A opportunity ${stamp}`,
+          ...(leadEmail.trim() ? { contactEmail: leadEmail.trim() } : {}),
+        },
+        'follow-up-task': {
+          provider: 'ghl',
+          title: 'Book appointment (human)',
+          body: 'SA-STD-001: human books appointment until crm.appointment.* is active',
+        },
+        'crm-note': {
+          provider: 'ghl',
+          body: 'Lead-to-Appointment v1 qualification note',
+        },
+        'draft-message': {
+          provider: 'ghl',
+          body: 'Draft follow-up — do not send (L2A v1 communication rules)',
+        },
+      };
+    } else if (leadEmail.trim()) {
       body.stepPayloads = {
         'ghl-upsert': {
           provider: 'ghl',
@@ -232,6 +279,13 @@ export default function NewMission() {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">{template.description}</p>
+          {template.secureAutomationStandard && (
+            <p className="text-xs text-muted-foreground">
+              {template.secureAutomationStandard.standardId} v
+              {template.secureAutomationStandard.standardVersion} — draft messaging only;
+              appointment booking stays human-operated.
+            </p>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -247,7 +301,11 @@ export default function NewMission() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="email">Lead email (optional)</Label>
+          <Label htmlFor="email">
+            {template.id === 'lead-to-appointment-v1'
+              ? 'Lead email (optional CRM context)'
+              : 'Lead email (optional)'}
+          </Label>
           <Input
             id="email"
             type="email"

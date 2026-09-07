@@ -117,6 +117,14 @@ export interface ImplementationCase {
     packageKey?: string;
     approvedBy?: string;
     approvedAt?: string;
+    firstWorkflow?: { name?: string; inputs?: string[]; outputs?: string[] };
+    secureAutomation?: {
+      standardId?: string;
+      standardVersion?: string;
+      workflowId?: string;
+      workflowVersion?: string;
+      controls?: string[];
+    };
   };
   provisioning?: {
     steps?: Array<{
