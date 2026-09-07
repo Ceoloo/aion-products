@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, ListChecks, ShieldAlert } from 'lucide-react';
 import { PRESETS, useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,7 @@ export function Shell({
             <Link to="/" className="font-display text-lg tracking-tight text-foreground">
               AION
               <span className="ml-2 text-xs font-sans font-normal uppercase tracking-[0.18em] text-muted-foreground">
-                Workforce
+                Operator
               </span>
             </Link>
             <nav className="hidden sm:flex items-center gap-1 text-sm">
@@ -41,7 +41,19 @@ export function Shell({
                 }
               >
                 <LayoutDashboard className="h-3.5 w-3.5" />
-                Holding
+                Command
+              </NavLink>
+              <NavLink
+                to="/missions"
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-muted-foreground hover:text-foreground',
+                    isActive && 'bg-secondary text-foreground',
+                  )
+                }
+              >
+                <ListChecks className="h-3.5 w-3.5" />
+                Missions
               </NavLink>
             </nav>
           </div>

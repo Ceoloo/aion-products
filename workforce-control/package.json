@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "AION Workforce Control Center — Mission 006 read-only pane of glass over Runtime/Data truth.",
+  "description": "AION Operator Console (UX-001) — Command Center + Mission Control over Runtime/Data truth.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

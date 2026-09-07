@@ -116,4 +116,24 @@ export const RuntimeApi = {
       tenantId,
     );
   },
+
+  /**
+   * Governed human gate — UI never invents authority; Runtime decides.
+   * Body: { approve, decidedBy, note? }
+   */
+  decideApproval(
+    tenantId: string,
+    approvalId: string,
+    body: { approve: boolean; decidedBy: string; note?: string },
+  ) {
+    return request<{
+      status: string;
+      run: unknown;
+      execution: ExecutionObject | null;
+      decision: unknown;
+    }>(`/v1/approvals/${encodeURIComponent(approvalId)}/decision`, tenantId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
 };

@@ -78,8 +78,8 @@ export default function MissionDetail() {
   return (
     <Shell>
       <div className="mb-6 text-sm">
-        <Link to="/" className="text-muted-foreground hover:text-foreground">
-          ← Holding
+        <Link to="/missions" className="text-muted-foreground hover:text-foreground">
+          ← Mission Control
         </Link>
       </div>
 

@@ -1,12 +1,17 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { ApprovalRequest } from '@/lib/types';
+import { RuntimeApi, RuntimeHttpError } from '@/lib/runtime-api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 
+const DECIDED_BY =
+  (import.meta.env.VITE_AION_OPERATOR_ID as string | undefined) ?? 'operator-console';
+
 /**
- * Inspect-only approval queue.
- * Decide remains a Runtime POST — link note only (no broad write cockpit).
+ * Approval queue — inspect + decide via Runtime POST /v1/approvals/:id/decision.
+ * UI is not the authority; every Approve/Deny is a governed capability call.
  */
 export function ApprovalPanel({
   open,
@@ -14,14 +19,44 @@ export function ApprovalPanel({
   approvals,
   loading,
   error,
+  tenantId,
+  onDecided,
 }: {
   open: boolean;
   onClose: () => void;
   approvals: ApprovalRequest[];
   loading: boolean;
   error: string | null;
+  tenantId: string;
+  onDecided?: () => void;
 }) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   if (!open) return null;
+
+  async function decide(approvalId: string, approve: boolean) {
+    setBusyId(approvalId);
+    setActionError(null);
+    try {
+      await RuntimeApi.decideApproval(tenantId, approvalId, {
+        approve,
+        decidedBy: DECIDED_BY,
+        note: approve ? 'approved via Operator Console' : 'denied via Operator Console',
+      });
+      onDecided?.();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof RuntimeHttpError
+          ? `${err.code}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : 'decision failed';
+      setActionError(msg);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -36,7 +71,7 @@ export function ApprovalPanel({
           <div>
             <div className="font-display text-lg">Approval queue</div>
             <p className="text-xs text-muted-foreground">
-              Inspect-only · decide via Runtime POST /v1/approvals/:id/decision
+              Decide via Runtime · decidedBy={DECIDED_BY}
             </p>
           </div>
           <Button type="button" size="icon" variant="ghost" onClick={onClose}>
@@ -46,6 +81,7 @@ export function ApprovalPanel({
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {loading && <p className="text-sm text-muted-foreground">Loading approvals…</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {actionError && <p className="text-sm text-destructive">{actionError}</p>}
           {!loading && !error && approvals.length === 0 && (
             <p className="text-sm text-muted-foreground">
               No pending approvals from API for this tenant.
@@ -71,7 +107,10 @@ export function ApprovalPanel({
                 <dt>Mission</dt>
                 <dd className="truncate">
                   {a.missionId ? (
-                    <Link className="text-primary underline-offset-2 hover:underline" to={`/missions/${a.missionId}`}>
+                    <Link
+                      className="text-primary underline-offset-2 hover:underline"
+                      to={`/missions/${a.missionId}`}
+                    >
                       {a.missionId}
                     </Link>
                   ) : (
@@ -81,7 +120,10 @@ export function ApprovalPanel({
                 <dt>Execution</dt>
                 <dd className="truncate">
                   {a.executionId ? (
-                    <Link className="text-primary underline-offset-2 hover:underline" to={`/executions/${a.executionId}`}>
+                    <Link
+                      className="text-primary underline-offset-2 hover:underline"
+                      to={`/executions/${a.executionId}`}
+                    >
                       {a.executionId}
                     </Link>
                   ) : (
@@ -91,6 +133,25 @@ export function ApprovalPanel({
                 <dt>Requested</dt>
                 <dd className="font-mono">{a.requestedAt ?? '—'}</dd>
               </dl>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busyId === a.approvalId}
+                  onClick={() => void decide(a.approvalId, true)}
+                >
+                  {busyId === a.approvalId ? '…' : 'Approve'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busyId === a.approvalId}
+                  onClick={() => void decide(a.approvalId, false)}
+                >
+                  Deny
+                </Button>
+              </div>
             </article>
           ))}
         </div>
