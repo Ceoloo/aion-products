@@ -54,20 +54,32 @@ export function LiveCockpit(p: {
 
   const s = p.state;
   const topRec = p.recs[0];
+  const turnCount = p.transcript.filter((t) => t.speaker !== 'system').length;
+
+  const copyUtterance = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* clipboard may be denied; still mark feedback below */
+    }
+  };
 
   return (
-    <div className="room-enter grid h-[calc(100dvh-8.5rem)] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.85fr)]">
+    <div className="room-enter grid min-h-[calc(100dvh-8.5rem)] gap-4 lg:h-[calc(100dvh-8.5rem)] lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.85fr)]">
       {/* Conversation — ChatGPT-like stage */}
-      <section className="panel flex min-h-0 flex-col overflow-hidden">
+      <section className="panel flex min-h-[28rem] flex-col overflow-hidden lg:min-h-0">
         <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 md:px-5">
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="signal-live">Live channel</span>
               {p.leadName && (
-                <span className="text-sm text-muted-foreground">with <span className="text-foreground">{p.leadName}</span></span>
+                <span className="text-sm text-muted-foreground">
+                  with <span className="text-foreground">{p.leadName}</span>
+                </span>
               )}
+              <span className="font-mono text-[11px] text-muted-foreground">{turnCount} turns</span>
             </div>
-            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{p.briefing}</p>
+            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{p.briefing || 'Copilot is listening for the next beat.'}</p>
           </div>
           <Badge variant={p.aiPath === 'claude' ? 'default' : 'secondary'} className="shrink-0">
             {p.aiPath === 'claude' ? 'Claude · governed' : 'Deterministic · governed'}
@@ -82,7 +94,7 @@ export function LiveCockpit(p: {
               </div>
               <p className="font-display text-lg font-semibold">Open the channel</p>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Dictate, type what was just said, or paste a transcript. Copilot labels Rep vs Lead and starts guiding.
+                Dictate, type what was just said, or paste a transcript. Copilot labels You vs Lead and starts guiding like a live chat partner.
               </p>
             </div>
           )}
@@ -92,6 +104,22 @@ export function LiveCockpit(p: {
         </div>
 
         <div className="border-t border-border/60 bg-card/40 p-3 md:p-4">
+          {topRec?.suggestedUtterance && (
+            <button
+              type="button"
+              onClick={() => {
+                void copyUtterance(topRec.suggestedUtterance!);
+                p.onFeedback(topRec.id, 'acted_on');
+              }}
+              className="mb-3 flex w-full items-start gap-3 rounded-xl border border-primary/35 bg-primary/10 px-3 py-2.5 text-left transition hover:bg-primary/15"
+            >
+              <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">Say this · tap to use</div>
+                <p className="mt-0.5 text-sm leading-relaxed">“{topRec.suggestedUtterance}”</p>
+              </div>
+            </button>
+          )}
           <div className="composer-shell">
             <Button
               variant={mic.listening ? 'destructive' : 'outline'}
@@ -154,7 +182,7 @@ export function LiveCockpit(p: {
       </section>
 
       {/* Jarvis intel rail */}
-      <aside className="panel flex min-h-0 flex-col overflow-hidden jarvis-glow">
+      <aside className="panel flex min-h-[24rem] flex-col overflow-hidden jarvis-glow lg:min-h-0">
         <div className="flex items-center gap-1 border-b border-border/60 p-2">
           <button
             type="button"
@@ -250,6 +278,12 @@ export function LiveCockpit(p: {
                       <span className="text-muted-foreground"> · high water {s.position.highWaterOrder}</span>
                     </div>
                   </div>
+
+                  {s.readiness.primaryBlocker && (
+                    <div className="rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn">
+                      Blocker: {s.readiness.primaryBlocker}
+                    </div>
+                  )}
 
                   <div>
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Readiness signals</div>
