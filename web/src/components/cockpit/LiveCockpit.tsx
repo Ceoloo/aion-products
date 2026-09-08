@@ -181,8 +181,8 @@ export function LiveCockpit(p: {
         </div>
       </section>
 
-      {/* Jarvis intel rail */}
-      <aside className="panel flex min-h-[24rem] flex-col overflow-hidden jarvis-glow lg:min-h-0">
+      {/* Atlas intel rail */}
+      <aside className="panel flex min-h-[24rem] flex-col overflow-hidden atlas-glow lg:min-h-0">
         <div className="flex items-center gap-1 border-b border-border/60 p-2">
           <button
             type="button"
