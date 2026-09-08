@@ -153,7 +153,7 @@ export default function Ol001Scoreboard() {
     >
       <header className="mb-8 animate-fade-up">
         <p className="text-[0.7rem] uppercase tracking-[0.22em] text-muted-foreground">
-          OL-001 · Revenue Production · PAUSED
+          OL-001 · Revenue Production · LIVE
         </p>
         <h1 className="mt-2 font-display text-4xl md:text-5xl font-semibold tracking-tight">
           Scoreboard

@@ -96,14 +96,16 @@ services:
 Route via Traefik (OPS-001) the same way as Runtime when public ingress is needed.
 Do **not** inject OpenRouter/GHL keys into the `aion-runtime` service allowlist.
 
-## GHL — still parked for writes
+## GHL — writes certified via the Execution Gateway
 
-GHL **writes** (update contact, send message) need at-most-once semantics via the
-Execution Gateway / external side-effect ledger. Do not wire writes from this
-service until that path is certified.
+GHL **writes** (`crm.note.create`, `crm.opportunity.update` stage change) are now
+exercised end-to-end through the Runtime **Execution Gateway** with at-most-once
+semantics (external side-effect ledger + idempotency key + R2 human gate), proven
+by the ghl-live capability matrix (`aion-runtime`: `npm run proof:ghl-live-capability`).
+This service still does **not** wire GHL writes directly — it routes them through
+the gateway, never inventing send.
 
-Read-only GHL (`crm.contact.read` / search) remains a safe follow-up and can use
-`GHL_*` slots without inventing send.
+Read-only GHL (`crm.contact.read` / search) uses the same `GHL_*` slots.
 
 ## Operator standing item
 

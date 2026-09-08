@@ -25,7 +25,8 @@ function mintId(prefix: string): string {
 
 /**
  * New Mission — Launch submits POST /v1/missions/run (canonical Runtime contract).
- * While OL-001 is paused, launches are PRE-OL validation (not production cohort).
+ * This launcher submits PRE-OL validation missions (tagged pre_ol_validation) —
+ * never OL-001 production cohort credit, regardless of pause state.
  */
 export default function NewMission() {
   const { tenantId } = useTenant();
@@ -228,7 +229,7 @@ export default function NewMission() {
         </h1>
         <p className="mt-3 max-w-xl text-sm text-muted-foreground">
           Submits the canonical <span className="font-mono text-xs">POST /v1/missions/run</span>{' '}
-          contract. While OL-001 is paused, launches are tagged{' '}
+          contract. Launches here are tagged{' '}
           <span className="font-mono text-xs">pre_ol_validation</span> and do not count toward
           the 100-mission cohort.
         </p>
