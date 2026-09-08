@@ -5,6 +5,7 @@ import { LaunchPad } from '@/components/cockpit/LaunchPad';
 import { LiveCockpit } from '@/components/cockpit/LiveCockpit';
 import { Debrief } from '@/components/cockpit/Debrief';
 import { ControlRoom } from '@/components/cockpit/ControlRoom';
+import { CockpitStandby, DebriefStandby } from '@/components/cockpit/Standby';
 
 export default function App() {
   const [room, setRoom] = useState<Room>('launch');
@@ -18,6 +19,8 @@ export default function App() {
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [fb, setFb] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<string | null>(null);
+  /** True after End call — Debrief is ready even if user navigates away and back. */
+  const [awaitingDebrief, setAwaitingDebrief] = useState(false);
 
   useEffect(() => {
     AionApi.schemas()
@@ -39,8 +42,20 @@ export default function App() {
 
   const ingestChain = useRef<Promise<void>>(Promise.resolve());
 
+  const clearLive = () => {
+    setSessionId(null);
+    setLeadName('');
+    setBriefing('');
+    setAiPath('');
+    setState(null);
+    setRecs([]);
+    setTranscript([]);
+    setFb({});
+    setAwaitingDebrief(false);
+  };
+
   const navGuard = (target: Room) => {
-    if (sessionId && target === 'launch' && room !== 'launch') {
+    if (sessionId && !awaitingDebrief && target === 'launch' && room !== 'launch') {
       if (
         !window.confirm(
           'Leave this live engagement? The current cockpit session will be abandoned (not saved to the mission log).',
@@ -49,17 +64,16 @@ export default function App() {
         return;
       }
       void AionApi.abandonLive(sessionId).catch(() => {});
-      setSessionId(null);
-      setLeadName('');
-      setState(null);
-      setRecs([]);
-      setTranscript([]);
+      clearLive();
     }
     setRoom(target);
   };
 
+  const live = !!sessionId && !awaitingDebrief;
+  const canDebrief = !!sessionId && awaitingDebrief && !!state;
+
   return (
-    <CockpitShell room={room} onNav={navGuard} live={!!sessionId} leadName={leadName || undefined} toast={toast}>
+    <CockpitShell room={room} onNav={navGuard} live={live} leadName={leadName || undefined} toast={toast}>
       {room === 'launch' && (
         <LaunchPad
           schemas={schemas}
@@ -74,6 +88,7 @@ export default function App() {
               setRecs([]);
               setTranscript([]);
               setFb({});
+              setAwaitingDebrief(false);
               setRoom('live');
             } catch (e: any) {
               setToast(e.message);
@@ -82,62 +97,75 @@ export default function App() {
         />
       )}
 
-      {room === 'live' && sessionId && (
-        <LiveCockpit
-          sessionId={sessionId}
-          briefing={briefing}
-          aiPath={aiPath}
-          leadName={leadName || undefined}
-          state={state}
-          recs={recs}
-          transcript={transcript}
-          fb={fb}
-          onIngest={(fn) => {
-            ingestChain.current = ingestChain.current.then(async () => {
+      {room === 'live' && (
+        live && sessionId ? (
+          <LiveCockpit
+            sessionId={sessionId}
+            briefing={briefing}
+            aiPath={aiPath}
+            leadName={leadName || undefined}
+            state={state}
+            recs={recs}
+            transcript={transcript}
+            fb={fb}
+            onIngest={(fn) => {
+              ingestChain.current = ingestChain.current.then(async () => {
+                try {
+                  const r = await fn();
+                  setRecs(r.recommendations);
+                  await refresh(sessionId);
+                } catch (e: any) {
+                  setToast(e.message);
+                }
+              });
+            }}
+            onFeedback={async (id, f) => {
+              setFb((m) => ({ ...m, [id]: f }));
               try {
-                const r = await fn();
-                setRecs(r.recommendations);
+                await AionApi.feedback(sessionId, id, f);
+              } catch (e: any) {
+                setToast(e.message);
+              }
+            }}
+            onEnd={async () => {
+              try {
                 await refresh(sessionId);
               } catch (e: any) {
                 setToast(e.message);
               }
-            });
-          }}
-          onFeedback={async (id, f) => {
-            setFb((m) => ({ ...m, [id]: f }));
-            try {
-              await AionApi.feedback(sessionId, id, f);
-            } catch (e: any) {
-              setToast(e.message);
-            }
-          }}
-          onEnd={async () => {
-            try {
-              await refresh(sessionId);
-            } catch (e: any) {
-              setToast(e.message);
-            }
-            setRoom('debrief');
-          }}
-        />
+              setAwaitingDebrief(true);
+              setRoom('debrief');
+            }}
+          />
+        ) : (
+          <CockpitStandby onLaunch={() => setRoom('launch')} />
+        )
       )}
 
-      {room === 'debrief' && sessionId && state && (
-        <Debrief
-          state={state}
-          transcript={transcript}
-          onSave={async (gt) => {
-            try {
-              const d = await AionApi.finalize(sessionId, gt);
-              setToast(`Mission locked · ${d.kind}${d.evaluable ? ' · evaluable' : ''}`);
-              setSessionId(null);
-              setLeadName('');
-              setRoom('control');
-            } catch (e: any) {
-              setToast(e.message);
-            }
-          }}
-        />
+      {room === 'debrief' && (
+        canDebrief && sessionId && state ? (
+          <Debrief
+            state={state}
+            transcript={transcript}
+            leadName={leadName || undefined}
+            onSave={async (gt) => {
+              try {
+                const d = await AionApi.finalize(sessionId, gt);
+                setToast(`Mission locked · ${d.kind}${d.evaluable ? ' · evaluable' : ''}`);
+                clearLive();
+                setRoom('control');
+              } catch (e: any) {
+                setToast(e.message);
+              }
+            }}
+          />
+        ) : (
+          <DebriefStandby
+            hasLiveSession={live}
+            onCockpit={() => setRoom('live')}
+            onLaunch={() => setRoom('launch')}
+          />
+        )
       )}
 
       {room === 'control' && <ControlRoom onNewCall={() => setRoom('launch')} />}

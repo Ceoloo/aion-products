@@ -4,10 +4,10 @@ import { Crosshair, Headphones, LayoutDashboard, Rocket } from 'lucide-react';
 
 export type Room = 'launch' | 'live' | 'debrief' | 'control';
 
-const ROOMS: Array<{ id: Room; label: string; hint: string; Icon: typeof Rocket; needsLive?: boolean }> = [
+const ROOMS: Array<{ id: Room; label: string; hint: string; Icon: typeof Rocket }> = [
   { id: 'launch', label: 'Launch', hint: 'Engage a lead', Icon: Rocket },
-  { id: 'live', label: 'Cockpit', hint: 'Live guidance', Icon: Headphones, needsLive: true },
-  { id: 'debrief', label: 'Debrief', hint: 'Lock the truth', Icon: Crosshair, needsLive: true },
+  { id: 'live', label: 'Cockpit', hint: 'Live guidance', Icon: Headphones },
+  { id: 'debrief', label: 'Debrief', hint: 'Lock the truth', Icon: Crosshair },
   { id: 'control', label: 'Control', hint: 'Mission room', Icon: LayoutDashboard },
 ];
 
@@ -47,25 +47,27 @@ export function CockpitShell({
             </div>
           </div>
 
-          <nav className="ml-auto hidden items-center gap-1 rounded-full border border-border/70 bg-card/50 p-1 md:flex">
-            {ROOMS.map(({ id, label, Icon, needsLive }) => {
-              const disabled = !!needsLive && !live;
+          <nav className="ml-auto hidden items-center gap-1 rounded-full border border-border/70 bg-card/50 p-1 md:flex" aria-label="Rooms">
+            {ROOMS.map(({ id, label, hint, Icon }) => {
               const active = room === id;
               return (
                 <button
                   key={id}
                   type="button"
-                  disabled={disabled}
+                  title={hint}
                   onClick={() => onNav(id)}
                   className={cn(
                     'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-all',
                     active && 'bg-primary text-primary-foreground shadow-sm',
-                    !active && !disabled && 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                    disabled && 'cursor-not-allowed opacity-35',
+                    !active && 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                    id === 'live' && live && !active && 'text-live',
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {label}
+                  {id === 'live' && live && (
+                    <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-live shadow-[0_0_8px_hsl(var(--live))]" />
+                  )}
                 </button>
               );
             })}
@@ -96,23 +98,27 @@ export function CockpitShell({
       <nav
         className="sticky bottom-0 z-20 grid grid-cols-4 border-t border-border/70 bg-background/90 backdrop-blur-xl md:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom,0px)' }}
+        aria-label="Rooms"
       >
-        {ROOMS.map(({ id, label, Icon, needsLive }) => {
-          const disabled = !!needsLive && !live;
+        {ROOMS.map(({ id, label, Icon }) => {
           const active = room === id;
           return (
             <button
               key={id}
               type="button"
-              disabled={disabled}
               onClick={() => onNav(id)}
               className={cn(
                 'flex flex-col items-center gap-1 py-2.5 text-[10px] uppercase tracking-wide',
                 active ? 'text-primary' : 'text-muted-foreground',
-                disabled && 'opacity-35',
+                id === 'live' && live && !active && 'text-live',
               )}
             >
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {id === 'live' && live && (
+                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-live" />
+                )}
+              </span>
               {label}
             </button>
           );
