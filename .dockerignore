@@ -1,0 +1,18 @@
+# Keep the Docker build context lean and free of source-control / dev residue.
+# The Dockerfile COPYs only package manifests, .vendor, src and fixtures, but a
+# trimmed context also speeds the build and keeps boot-check hygiene guarantees.
+.git
+node_modules
+**/node_modules
+web
+workforce-control
+test
+docs
+coverage
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+# Vendored @aion/core is REQUIRED in the context (Dockerfile: COPY .vendor .vendor)
+# and is produced by `npm run setup:core` before the build — do not ignore it.
