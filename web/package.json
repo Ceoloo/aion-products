@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "AION Revenue Copilot — Validation Console (React + Vite + Tailwind + shadcn/ui).",
+  "description": "AION Revenue Copilot — sales cockpit UI (React + Vite + Tailwind). Live Jarvis-style guidance; CRM stays in GoHighLevel.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
