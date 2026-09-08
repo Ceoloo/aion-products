@@ -111,6 +111,23 @@ Downstream conversions: n / 3
 Lineage completeness:   %          (context→state→rec→feedback→response→movement, =100%)
 ```
 
+### Session record CRUD
+
+Persisted `SessionRecord`s (written on finalize) support full read/update/delete
+from the Dashboard and over HTTP:
+
+| Method | Path | Role |
+|---|---|---|
+| POST | `/api/session` + `…/finalize` | Create (live → durable record) |
+| GET | `/api/sessions` | List record summaries (`?full=1` for full bodies) |
+| GET | `/api/sessions/:id` | Read one canonical record + score |
+| PATCH | `/api/sessions/:id` | Update ground truth (`{ groundTruth }`, or `null` to clear) |
+| DELETE | `/api/sessions/:id` | Delete a persisted record |
+| DELETE | `/api/session/:id` | Abandon a live (not-yet-finalized) session |
+
+Updating ground truth re-derives `kind` / `disposition` / `evaluable` and
+refreshes Mission-001 dashboard metrics on the next load.
+
 Lineage completeness requires the **whole** documented chain to exist for a
 finalized call — every surfaced recommendation linked to a canonical trace id
 and detected-state snapshot, at least one intervention with rep feedback, at

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Headphones, ClipboardList, BarChart3, ClipboardEdit, Mic, Square, Send, PhoneOff,
-  RotateCcw, Check, X, Pencil, Ban, Sparkles, TriangleAlert, User, UserRound,
+  RotateCcw, Check, X, Pencil, Ban, Sparkles, TriangleAlert, User, UserRound, Trash2, Eye,
 } from 'lucide-react';
-import { AionApi, type DealState, type Recommendation, type SchemaInfo, type Turn, type DashboardMetrics, type DashboardRecord, type GateStatus, type ReadinessReport } from '@/lib/api';
+import { AionApi, type DealState, type Recommendation, type SchemaInfo, type Turn, type DashboardMetrics, type DashboardRecord, type GateStatus, type ReadinessReport, type SessionRecordDetail } from '@/lib/api';
 import { useMic } from '@/hooks/useMic';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -495,8 +495,56 @@ function ValidateView({ state, transcript, onSave }: { state: DealState; transcr
 function DashboardView({ onNewCall }: { onNewCall: () => void }) {
   const [m, setM] = useState<DashboardMetrics | null>(null);
   const [records, setRecords] = useState<DashboardRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<SessionRecordDetail | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
   const load = () => AionApi.dashboard().then((d) => { setM(d.metrics); setRecords(d.records); }).catch(() => {});
   useEffect(() => { load(); }, []);
+
+  const openRecord = async (id: string) => {
+    setSelectedId(id);
+    setErr(null);
+    setDetail(null);
+    try {
+      const d = await AionApi.getSession(id);
+      setDetail(d.record);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm(`Delete session ${id}? This cannot be undone.`)) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await AionApi.deleteSession(id);
+      if (selectedId === id) { setSelectedId(null); setDetail(null); }
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveGt = async (groundTruth: unknown) => {
+    if (!selectedId) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const d = await AionApi.updateSession(selectedId, groundTruth);
+      setDetail(d.record);
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -506,6 +554,7 @@ function DashboardView({ onNewCall }: { onNewCall: () => void }) {
           <Button size="sm" onClick={onNewCall}>New call</Button>
         </div>
       </div>
+      {err && <p className="text-sm text-destructive">{err}</p>}
       {m && (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -533,24 +582,150 @@ function DashboardView({ onNewCall }: { onNewCall: () => void }) {
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground"><tr className="border-b">
-              {['When', 'Prospect', 'Industry', 'Kind', 'Disposition', 'Eval', 'Outcome', 'Adv', 'AI stage'].map((h) => <th key={h} className="px-2 py-2 text-left font-medium">{h}</th>)}
+              {['When', 'Prospect', 'Industry', 'Kind', 'Disposition', 'Eval', 'Outcome', 'Adv', 'AI stage', ''].map((h) => <th key={h || 'actions'} className="px-2 py-2 text-left font-medium">{h}</th>)}
             </tr></thead>
             <tbody>
               {records.map((r) => (
-                <tr key={r.sessionId} className="border-b border-border/60">
+                <tr key={r.sessionId} className={cn('border-b border-border/60', selectedId === r.sessionId && 'bg-secondary/40')}>
                   <td className="px-2 py-2">{new Date(r.createdAt).toLocaleString()}</td>
                   <td className="px-2 py-2">{r.prospect}</td><td className="px-2 py-2">{r.industry}</td>
                   <td className="px-2 py-2">{titleCase(r.kind)}</td><td className="px-2 py-2">{titleCase(r.disposition)}</td>
                   <td className="px-2 py-2">{r.evaluable ? '✓' : '—'}</td><td className="px-2 py-2">{r.outcome ? titleCase(r.outcome) : '—'}</td>
                   <td className="px-2 py-2">{r.advanced ? '▲' : '—'}</td><td className="px-2 py-2">{r.aiStage}</td>
+                  <td className="px-2 py-2">
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="outline" className="h-7 w-7" title="View / edit" onClick={() => openRecord(r.sessionId)} disabled={busy}><Eye className="h-3.5 w-3.5" /></Button>
+                      <Button size="icon" variant="outline" className="h-7 w-7 text-destructive" title="Delete" onClick={() => remove(r.sessionId)} disabled={busy}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {records.length === 0 && <tr><td colSpan={9} className="px-2 py-6 text-center text-muted-foreground">No sessions yet.</td></tr>}
+              {records.length === 0 && <tr><td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">No sessions yet.</td></tr>}
             </tbody>
           </table>
         </CardContent>
       </Card>
+      {detail && selectedId && (
+        <SessionDetailPanel
+          record={detail}
+          busy={busy}
+          onClose={() => { setSelectedId(null); setDetail(null); }}
+          onDelete={() => remove(selectedId)}
+          onSave={saveGt}
+        />
+      )}
     </div>
+  );
+}
+
+function SessionDetailPanel({
+  record,
+  busy,
+  onClose,
+  onDelete,
+  onSave,
+}: {
+  record: SessionRecordDetail;
+  busy: boolean;
+  onClose: () => void;
+  onDelete: () => void;
+  onSave: (gt: unknown) => void;
+}) {
+  const gt = record.after.groundTruth;
+  const [outcome, setOutcome] = useState(gt?.outcome ?? '');
+  const [disposition, setDisposition] = useState(gt?.disposition ?? '');
+  const [advanced, setAdvanced] = useState(gt?.advanced ?? false);
+  const [downstream, setDownstream] = useState(gt?.downstreamConversion ?? '');
+  const [evaluable, setEvaluable] = useState(gt?.evaluable ?? record.evaluable);
+  const [guidance, setGuidance] = useState<string | null>(gt?.guidance ?? null);
+  const [notes, setNotes] = useState(gt?.notes ?? '');
+  const [verdicts, setVerdicts] = useState<Record<string, { verdict: string; corrected?: string }>>(gt?.fields ?? {});
+
+  useEffect(() => {
+    const next = record.after.groundTruth;
+    setOutcome(next?.outcome ?? '');
+    setDisposition(next?.disposition ?? '');
+    setAdvanced(next?.advanced ?? false);
+    setDownstream(next?.downstreamConversion ?? '');
+    setEvaluable(next?.evaluable ?? record.evaluable);
+    setGuidance(next?.guidance ?? null);
+    setNotes(next?.notes ?? '');
+    setVerdicts(next?.fields ?? {});
+  }, [record]);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
+        <div>
+          <CardTitle className="text-sm uppercase tracking-wide text-muted-foreground">Session record</CardTitle>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{record.sessionId}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
+          <Button size="sm" variant="destructive" onClick={onDelete} disabled={busy}><Trash2 className="mr-1 h-4 w-4" /> Delete</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+          <div><div className="text-[11px] uppercase text-muted-foreground">Prospect</div>{record.before.context.prospect.name}</div>
+          <div><div className="text-[11px] uppercase text-muted-foreground">Industry</div>{record.industry}</div>
+          <div><div className="text-[11px] uppercase text-muted-foreground">Kind</div>{titleCase(record.kind)}</div>
+          <div><div className="text-[11px] uppercase text-muted-foreground">Turns</div>{record.during.transcript.length}</div>
+        </div>
+        <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2 text-sm">
+          {record.during.transcript.map((t) => (
+            <div key={t.index}><span className="font-medium capitalize text-muted-foreground">{t.speaker}: </span>{t.text}</div>
+          ))}
+          {record.during.transcript.length === 0 && <p className="text-muted-foreground">No transcript.</p>}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div><Label>Call outcome</Label>
+            <Select value={outcome} onValueChange={setOutcome}><SelectTrigger className="mt-1"><SelectValue placeholder="Select…" /></SelectTrigger>
+              <SelectContent>{OUTCOMES.map((o) => <SelectItem key={o} value={o}>{titleCase(o)}</SelectItem>)}</SelectContent></Select>
+          </div>
+          <div><Label>Disposition</Label>
+            <Select value={disposition} onValueChange={setDisposition}><SelectTrigger className="mt-1"><SelectValue placeholder="Select…" /></SelectTrigger>
+              <SelectContent>{DISPOSITIONS.map((o) => <SelectItem key={o} value={o}>{titleCase(o)}</SelectItem>)}</SelectContent></Select>
+          </div>
+          <div><Label>Did the deal advance?</Label>
+            <div className="mt-1 flex gap-1.5">
+              <Button size="sm" variant={advanced ? 'default' : 'outline'} onClick={() => setAdvanced(true)}>Yes</Button>
+              <Button size="sm" variant={!advanced ? 'default' : 'outline'} onClick={() => setAdvanced(false)}>No</Button>
+            </div>
+          </div>
+          <div><Label>Downstream conversion</Label>
+            <Select value={downstream || 'none'} onValueChange={(v) => setDownstream(v === 'none' ? '' : v)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>{DOWNSTREAM.map((o) => <SelectItem key={o || 'none'} value={o || 'none'}>{o ? titleCase(o) : 'None'}</SelectItem>)}</SelectContent></Select>
+          </div>
+        </div>
+        <div>
+          <Label>Guidance</Label>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {['useful', 'acted_on', 'ignored', 'wrong', 'mixed'].map((g) => (
+              <Button key={g} size="sm" variant={guidance === g ? 'default' : 'outline'} onClick={() => setGuidance(g)}>{titleCase(g)}</Button>
+            ))}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm"><Checkbox checked={evaluable} onCheckedChange={(v) => setEvaluable(!!v)} /> Evaluable conversation</label>
+        <div><Label>Notes</Label><Textarea className="mt-1" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <Button
+          className="w-full"
+          disabled={busy || !outcome || !disposition}
+          onClick={() => onSave({
+            fields: verdicts,
+            guidance,
+            outcome,
+            disposition,
+            advanced,
+            downstreamConversion: downstream || null,
+            evaluable,
+            notes,
+          })}
+        >
+          Update ground truth
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
