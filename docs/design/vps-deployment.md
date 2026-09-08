@@ -47,6 +47,9 @@ Endpoints:
 | GET | `/health/ready` | Readiness (no DB; accepting traffic) |
 | GET | `/` | Release identity |
 | POST | `/v1/sessions` | Begin call session (`industry` + `context`) |
+| GET | `/v1/sessions` | List live in-memory sessions |
+| GET | `/v1/sessions/:id` | Read session state + transcript |
+| DELETE | `/v1/sessions/:id` | Abandon / drop a live session |
 | POST | `/v1/sessions/:id/turns` | Ingest one turn → live guidance |
 | POST | `/v1/sessions/:id/feedback` | Record rep feedback |
 | POST | `/v1/sessions/:id/finish` | Freeze `CallIntelligence` report |

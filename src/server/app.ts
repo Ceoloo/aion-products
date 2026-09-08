@@ -25,10 +25,11 @@ import type { GroundTruth, ConfirmedOutcome } from '../domain/session.ts';
 import { suggestEvaluable, suggestKind } from '../domain/session.ts';
 import { parseTranscript } from '../validation/transcript.ts';
 import { classifyLiveUtterance } from '../validation/speaker-roles.ts';
-import { JsonSessionStore } from '../validation/store.ts';
-import { assembleSessionRecord } from '../validation/record.ts';
+import { JsonSessionStore, type SessionStore } from '../validation/store.ts';
+import { assembleSessionRecord, applyGroundTruthToRecord } from '../validation/record.ts';
 import { buildDashboard, scoreRecord } from '../validation/scoring.ts';
 import { gatherReadiness } from '../validation/readiness.ts';
+import type { SessionRecord } from '../domain/session.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4173);
@@ -38,7 +39,7 @@ const PORT = Number(process.env.PORT ?? 4173);
 const HOST = process.env.AION_HOST ?? '127.0.0.1';
 const TOKEN = (process.env.AION_TOKEN ?? '').trim();
 const DATA_DIR = process.env.AION_DATA_DIR ?? join(process.cwd(), 'data');
-const store = new JsonSessionStore(DATA_DIR);
+let store: SessionStore = new JsonSessionStore(DATA_DIR);
 
 // Whitelists for validating operator-supplied ground truth (defence in depth;
 // combined with escaping on render, this blocks stored XSS / garbage records).
@@ -145,6 +146,23 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   const s = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(s) });
   res.end(s);
+}
+
+/** Dashboard-row summary for a persisted SessionRecord. */
+function summarizeRecord(r: SessionRecord) {
+  return {
+    sessionId: r.sessionId,
+    createdAt: r.createdAt,
+    prospect: r.before.context.prospect.name,
+    industry: r.industry,
+    kind: r.kind,
+    disposition: r.disposition,
+    evaluable: r.evaluable,
+    finalized: r.finalizedAt !== null,
+    outcome: r.after.groundTruth?.outcome ?? null,
+    advanced: r.after.groundTruth?.advanced ?? r.after.aiOutcome.advanced,
+    aiStage: `${r.after.aiOutcome.stageBeforeId}→${r.after.aiOutcome.stageAfterId}`,
+  };
 }
 
 // Built SPA lives at <repo>/web/dist; HERE is <repo>/src/server.
@@ -261,6 +279,19 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  // Abandon a live (in-memory) session without persisting a record.
+  const liveIdMatch = path.match(/^\/api\/session\/([^/]+)$/);
+  if (method === 'DELETE' && liveIdMatch) {
+    const sessionId = decodeURIComponent(liveIdMatch[1]!);
+    if (!live.has(sessionId)) {
+      json(res, 404, { error: 'live session not found' });
+      return;
+    }
+    live.delete(sessionId);
+    json(res, 200, { deleted: true, sessionId, scope: 'live' });
+    return;
+  }
+
   const m = path.match(/^\/api\/session\/([^/]+)\/(ingest|feedback|finalize|state)$/);
   if (m) {
     const s = live.get(m[1]!);
@@ -351,24 +382,88 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
   }
 
+  // ── Persisted SessionRecord CRUD ─────────────────────────────────────
+  // Plural /api/sessions* routes operate on durable records (Create happens
+  // via finalize; Read/Update/Delete are here). Distinct from singular
+  // /api/session* which is the live in-memory turn stream.
+
+  if (method === 'GET' && path === '/api/sessions') {
+    const records = await store.list();
+    const full = url.searchParams.get('full') === '1' || url.searchParams.get('full') === 'true';
+    json(res, 200, {
+      records: full ? records : records.map(summarizeRecord),
+      count: records.length,
+    });
+    return;
+  }
+
+  const persistedMatch = path.match(/^\/api\/sessions\/([^/]+)$/);
+  if (persistedMatch) {
+    const sessionId = decodeURIComponent(persistedMatch[1]!);
+
+    if (method === 'GET') {
+      const record = await store.get(sessionId);
+      if (!record) {
+        json(res, 404, { error: 'session record not found' });
+        return;
+      }
+      json(res, 200, { record, score: scoreRecord(record), summary: summarizeRecord(record) });
+      return;
+    }
+
+    if (method === 'PATCH') {
+      const existing = await store.get(sessionId);
+      if (!existing) {
+        json(res, 404, { error: 'session record not found' });
+        return;
+      }
+      const body = await readBody(req);
+      if (!body || typeof body !== 'object' || !('groundTruth' in body)) {
+        json(res, 400, { error: 'body must include groundTruth (object or null to clear)' });
+        return;
+      }
+      if (body.groundTruth === null) {
+        const cleared = applyGroundTruthToRecord(existing, null);
+        const ok = await store.update(cleared);
+        if (!ok) {
+          json(res, 404, { error: 'session record not found' });
+          return;
+        }
+        json(res, 200, { updated: true, record: cleared, score: scoreRecord(cleared), summary: summarizeRecord(cleared) });
+        return;
+      }
+      const gt = sanitizeGroundTruth(body.groundTruth);
+      if (!gt) {
+        json(res, 400, { error: 'groundTruth must be an object or null' });
+        return;
+      }
+      const updated = applyGroundTruthToRecord(existing, gt);
+      const ok = await store.update(updated);
+      if (!ok) {
+        json(res, 404, { error: 'session record not found' });
+        return;
+      }
+      json(res, 200, { updated: true, record: updated, score: scoreRecord(updated), summary: summarizeRecord(updated) });
+      return;
+    }
+
+    if (method === 'DELETE') {
+      const ok = await store.delete(sessionId);
+      if (!ok) {
+        json(res, 404, { error: 'session record not found' });
+        return;
+      }
+      json(res, 200, { deleted: true, sessionId, scope: 'persisted' });
+      return;
+    }
+  }
+
   if (method === 'GET' && path === '/api/dashboard') {
     const records = await store.list();
     const metrics = buildDashboard(records);
     json(res, 200, {
       metrics,
-      records: records.map((r) => ({
-        sessionId: r.sessionId,
-        createdAt: r.createdAt,
-        prospect: r.before.context.prospect.name,
-        industry: r.industry,
-        kind: r.kind,
-        disposition: r.disposition,
-        evaluable: r.evaluable,
-        finalized: r.finalizedAt !== null,
-        outcome: r.after.groundTruth?.outcome ?? null,
-        advanced: r.after.groundTruth?.advanced ?? r.after.aiOutcome.advanced,
-        aiStage: `${r.after.aiOutcome.stageBeforeId}→${r.after.aiOutcome.stageAfterId}`,
-      })),
+      records: records.map(summarizeRecord),
     });
     return;
   }
@@ -425,3 +520,7 @@ if (process.env.AION_CONSOLE_NO_AUTOSTART !== '1') {
 
 export { handle, buildContext };
 export { suggestEvaluable, suggestKind };
+/** Test-only: swap the SessionStore (in-memory preferred). */
+export function setSessionStoreForTests(next: SessionStore): void {
+  store = next;
+}

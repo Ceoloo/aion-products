@@ -44,11 +44,15 @@ function readToken(): string {
 const TOKEN = readToken();
 
 /** Same-origin JSON fetch helper: forwards the LAN token and throws on non-2xx. */
-async function api<T = any>(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T> {
+async function api<T = any>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET', body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body) headers['content-type'] = 'application/json';
+  if (body !== undefined) headers['content-type'] = 'application/json';
   if (TOKEN) headers['x-aion-token'] = TOKEN;
-  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   if (!res.ok) {
     const e = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(e.error || `HTTP ${res.status}`);
@@ -96,6 +100,37 @@ export type ReadinessLevel = 'ok' | 'warn' | 'blocker';
 export interface ReadinessCheck { id: string; level: ReadinessLevel; title: string; detail: string }
 export interface ReadinessReport { checks: ReadinessCheck[]; ready: boolean; aiPath: 'claude' | 'deterministic' }
 
+export interface SessionRecordDetail {
+  sessionId: string;
+  prospectId: string;
+  repId: string;
+  industry: string;
+  createdAt: string;
+  finalizedAt: string | null;
+  kind: string;
+  disposition: string;
+  evaluable: boolean;
+  before: { conversionStageId: string; context: { prospect: { name: string }; company?: { name?: string } } };
+  during: {
+    transcript: Turn[];
+    finalState: DealState;
+    recommendations: Recommendation[];
+  };
+  after: {
+    aiOutcome: { advanced: boolean; stageBeforeId: string; stageAfterId: string };
+    groundTruth: {
+      fields: Record<string, { verdict: string; corrected?: string }>;
+      guidance: string | null;
+      outcome: string;
+      advanced: boolean;
+      downstreamConversion: string | null;
+      disposition: string;
+      evaluable: boolean;
+      notes?: string;
+    } | null;
+  };
+}
+
 export const AionApi = {
   health: () => api<ReadinessReport>('/api/health'),
   schemas: () => api<{ schemas: SchemaInfo[] }>('/api/schemas'),
@@ -105,5 +140,11 @@ export const AionApi = {
   state: (id: string) => api<{ state: DealState; transcript: Turn[] }>(`/api/session/${id}/state`),
   feedback: (id: string, recommendationId: string, feedback: string) => api(`/api/session/${id}/feedback`, 'POST', { recommendationId, feedback }),
   finalize: (id: string, groundTruth: unknown) => api<{ saved: boolean; sessionId: string; kind: string; evaluable: boolean }>(`/api/session/${id}/finalize`, 'POST', { groundTruth }),
+  abandonLive: (id: string) => api<{ deleted: boolean; sessionId: string }>(`/api/session/${id}`, 'DELETE'),
   dashboard: () => api<{ metrics: DashboardMetrics; records: DashboardRecord[] }>('/api/dashboard'),
+  listSessions: () => api<{ records: DashboardRecord[]; count: number }>('/api/sessions'),
+  getSession: (id: string) => api<{ record: SessionRecordDetail; summary: DashboardRecord }>(`/api/sessions/${id}`),
+  updateSession: (id: string, groundTruth: unknown) =>
+    api<{ updated: boolean; record: SessionRecordDetail; summary: DashboardRecord }>(`/api/sessions/${id}`, 'PATCH', { groundTruth }),
+  deleteSession: (id: string) => api<{ deleted: boolean; sessionId: string }>(`/api/sessions/${id}`, 'DELETE'),
 };

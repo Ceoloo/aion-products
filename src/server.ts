@@ -12,10 +12,13 @@
  *   structured JSON logs, SIGTERM drain
  *
  * Product surface (thin wrapper over createCopilot / ingest / buildReport):
- *   POST /v1/sessions
- *   POST /v1/sessions/:id/turns
- *   POST /v1/sessions/:id/feedback
- *   POST /v1/sessions/:id/finish
+ *   POST   /v1/sessions
+ *   GET    /v1/sessions
+ *   GET    /v1/sessions/:id
+ *   DELETE /v1/sessions/:id
+ *   POST   /v1/sessions/:id/turns
+ *   POST   /v1/sessions/:id/feedback
+ *   POST   /v1/sessions/:id/finish
  */
 
 import http from 'node:http';
@@ -281,6 +284,49 @@ async function handle(
         industry,
         provider: providerName(),
         briefing: copilot.context.briefing,
+      });
+      return;
+    }
+
+    if (method === 'GET' && path === '/v1/sessions') {
+      pruneSessions();
+      const items = [...sessions.values()].map((s) => ({
+        sessionId: s.id,
+        callId: s.callId,
+        industry: s.industry,
+        createdAt: new Date(s.createdAt).toISOString(),
+        lastAccessAt: new Date(s.lastAccessAt).toISOString(),
+        finished: s.finished,
+        turnCount: s.copilot.getTranscript().length,
+      }));
+      done(200, { sessions: items, count: items.length });
+      return;
+    }
+
+    const sessionIdMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);
+    if (sessionIdMatch && (method === 'GET' || method === 'DELETE')) {
+      const sessionId = decodeURIComponent(sessionIdMatch[1]!);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        done(404, { error: 'session_not_found' });
+        return;
+      }
+      if (method === 'DELETE') {
+        sessions.delete(sessionId);
+        done(200, { deleted: true, sessionId });
+        return;
+      }
+      session.lastAccessAt = Date.now();
+      done(200, {
+        sessionId: session.id,
+        callId: session.callId,
+        industry: session.industry,
+        createdAt: new Date(session.createdAt).toISOString(),
+        lastAccessAt: new Date(session.lastAccessAt).toISOString(),
+        finished: session.finished,
+        state: session.copilot.currentState(),
+        transcript: session.copilot.getTranscript(),
+        recommendations: session.copilot.getSurfaced(),
       });
       return;
     }
