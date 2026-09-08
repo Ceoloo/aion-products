@@ -123,7 +123,7 @@ export default function HoldingOverview() {
           Holding view of the machine workforce. Metrics resolve from Runtime
           economics — never invented dashboard state. Current phase:{' '}
           <strong className="font-medium text-foreground">PRE-OL validation</strong>{' '}
-          (OL-001 paused). Cohort heartbeat stays honest at{' '}
+          (OL-001 live). Cohort heartbeat stays honest at{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/ol001">
             OL-001 scoreboard
           </Link>{' '}

@@ -1,9 +1,10 @@
 /**
  * Cohort classification for Operator Console missions.
  *
- * Standing rule: OL-001 is paused until live GHL + live model access are
- * verified. Console launches default to pre_ol_validation and must NOT inflate
- * the OL-001 100-mission scoreboard.
+ * Standing rule: OL-001 went live once live GHL + live model access were
+ * verified (ghl-live capability proof green). Console launches still default to
+ * pre_ol_validation and must NOT inflate the OL-001 100-mission scoreboard —
+ * production credit requires explicit productionEconomic=true opt-in.
  */
 
 export const COHORT_OL001 = 'OL-001';
