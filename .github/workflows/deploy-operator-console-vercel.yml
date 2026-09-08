@@ -1,11 +1,7 @@
 name: Deploy Operator Console to Vercel
 
+# Legacy/manual fallback only. Native Vercel Git integration is the production path.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'workforce-control/**'
-      - '.github/workflows/deploy-operator-console-vercel.yml'
   workflow_dispatch:
 
 concurrency:
