@@ -48,7 +48,7 @@ export function LaunchPad({
   return (
     <div className="room-enter grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
       <section className="panel overflow-hidden">
-        <div className="jarvis-glow border-b border-border/60 px-6 py-7 md:px-8 md:py-9">
+        <div className="atlas-glow border-b border-border/60 px-6 py-7 md:px-8 md:py-9">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Engage</p>
           <h1 className="mt-2 max-w-xl font-display text-3xl font-bold leading-[1.1] text-balance md:text-4xl">
             Walk the sale with your copilot — or let it drive the next move.
@@ -66,7 +66,7 @@ export function LaunchPad({
               active={mode === 'assist'}
               icon={Handshake}
               title="Assist me"
-              body="Jarvis-style guidance every turn. You stay on the mic; Copilot feeds the next move."
+              body="Atlas-style guidance every turn. You stay on the mic; Copilot feeds the next move."
               onClick={() => setMode('assist')}
             />
             <ModeCard

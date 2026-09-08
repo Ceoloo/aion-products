@@ -23,7 +23,7 @@ export function CockpitStandby({ onLaunch }: { onLaunch: () => void }) {
           </div>
           <h1 className="font-display text-2xl font-bold md:text-3xl">Cockpit is clear</h1>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-            This is your live sales channel — ChatGPT-style conversation on the left, Jarvis guidance on the right.
+            This is your live sales channel — ChatGPT-style conversation on the left, Atlas guidance on the right.
             Engage a lead to start streaming turns and next moves.
           </p>
           <Button className="mt-6 h-11 px-6 font-semibold" onClick={onLaunch}>
@@ -33,7 +33,7 @@ export function CockpitStandby({ onLaunch }: { onLaunch: () => void }) {
           <div className="mt-10 grid w-full max-w-lg gap-2 text-left sm:grid-cols-3">
             {[
               { Icon: Mic, t: 'Talk or paste', d: 'Turns stream in live' },
-              { Icon: Sparkles, t: 'Jarvis rail', d: 'Next move + deal radar' },
+              { Icon: Sparkles, t: 'Atlas rail', d: 'Next move + deal radar' },
               { Icon: ArrowRight, t: 'Advance', d: 'Push the ladder forward' },
             ].map(({ Icon, t, d }) => (
               <div key={t} className="panel-inset px-3 py-3">
@@ -46,9 +46,9 @@ export function CockpitStandby({ onLaunch }: { onLaunch: () => void }) {
         </div>
       </section>
 
-      <aside className="panel flex min-h-0 flex-col overflow-hidden jarvis-glow">
+      <aside className="panel flex min-h-0 flex-col overflow-hidden atlas-glow">
         <div className="border-b border-border/60 px-4 py-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Jarvis rail</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Atlas rail</div>
           <p className="mt-1 text-sm text-muted-foreground">Next move & deal radar appear when you are live.</p>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
@@ -77,7 +77,7 @@ export function DebriefStandby({
   return (
     <div className="room-enter mx-auto max-w-3xl">
       <section className="panel overflow-hidden">
-        <div className="jarvis-glow border-b border-border/60 px-6 py-8 md:px-8">
+        <div className="atlas-glow border-b border-border/60 px-6 py-8 md:px-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Debrief</p>
           <h1 className="mt-2 font-display text-3xl font-bold">Truth lock · pipeline move</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
