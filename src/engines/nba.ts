@@ -8,7 +8,7 @@
  * defending price.
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { DealState, Gap } from '../domain/deal.ts';
 import type { PreCallContext } from '../domain/context.ts';

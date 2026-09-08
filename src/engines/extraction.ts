@@ -6,7 +6,7 @@
  * deterministic heuristic path are governed and traced identically.
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { Turn } from '../domain/types.ts';
 import type { FactKey, FactMap, FactSlot } from '../domain/facts.ts';

@@ -68,6 +68,33 @@ engine ─AiTask→ AiExecutionService.run(task)         (src/platform/ai-execut
   records telemetry + events per governed run. `TraceSummary` is a read-model
   over that, not a parallel tracer.
 
+### Week 3 — durable Runtime path
+
+Production submissions go to durable AION Runtime over HTTP (`AION_RUNTIME_URL`
+or `runtimeUrl` on `createCopilot` / `AiExecutionService`). The product remains
+a Runtime **client**:
+
+```
+engine ─AiTask→ AiExecutionService.run(task)
+                   │
+                   ├─ offline/tests: in-memory @aion/core control plane
+                   │                 + RevenueExecutionAdapter (LLM / deterministic)
+                   │
+                   └─ production: RuntimeClient.submitCommand({ serviceKey, actor, … })
+                                  → POST /v1/commands
+                                  → Service Catalog resolution → governed execution
+```
+
+- **`runtime-client.ts`** — local HTTP client (no package dependency on
+  `aion-runtime`) for `/v1/commands`, approvals, executions, and services.
+- **`revenue-ai-tasks.ts`** — `serviceKeyForEngine(engine)` → `revenue.*@1`
+  catalog keys for live-call engines.
+- **`outcome.ts`** — `buildCallOutcomeAttribution` links call outcomes to
+  `runIds` / `executionIds` / cost accumulated via `attributionIds()`.
+- Denied capability/service paths and approval gates surface as errors (with
+  `approvalId` when Runtime requires a human gate). Offline tests keep the
+  in-memory plane when `AION_RUNTIME_URL` is unset.
+
 ### Consuming `@aion/core` (six-repo boundary)
 
 `@aion/core` is a separate repo and is not published to a registry, so
@@ -75,8 +102,7 @@ engine ─AiTask→ AiExecutionService.run(task)         (src/platform/ai-execut
 `.vendor/aion-core` (dist + trimmed manifest), consumed via a `file:`
 dependency. `aion-products` depends on the Core **contracts** directly and does
 **not** code-depend on `aion-runtime` — Runtime composes the production
-deployment (durable stores, real runtimes); here we use the in-memory control
-plane `@aion/core` ships for development, tests, and CI. Bumping the pinned
+deployment (durable stores, real runtimes); offline/tests use the in-memory control plane `@aion/core` ships; production sets `AION_RUNTIME_URL` and submits through Runtime. Bumping the pinned
 commit is a deliberate, reviewed change. (A published `@aion/core` package would
 replace the `file:` bootstrap with a normal version range — a future
 improvement.)

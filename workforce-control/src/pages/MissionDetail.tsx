@@ -1,0 +1,259 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { Shell } from '@/components/Shell';
+import { MetricLink } from '@/components/MetricLink';
+import { useTenant } from '@/hooks/useTenant';
+import { missionCohortLabel } from '@/lib/cohort';
+import { RuntimeApi } from '@/lib/runtime-api';
+import type { EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+
+/**
+ * Mission Detail — economics + lineage from API only.
+ * Inspect checklist: objective, workflow, executions, agent/tenant, I/O,
+ * approvals, policy, cost, terminal outcome — all from Runtime records.
+ */
+export default function MissionDetail() {
+  const { missionId = '' } = useParams();
+  const { tenantId } = useTenant();
+  const [mission, setMission] = useState<Mission | null>(null);
+  const [economics, setEconomics] = useState<EconomicsRollup | null>(null);
+  const [executions, setExecutions] = useState<ExecutionObject[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!missionId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      RuntimeApi.getMission(tenantId, missionId),
+      RuntimeApi.getMissionEconomics(tenantId, missionId),
+      RuntimeApi.listExecutions(tenantId, 200),
+    ])
+      .then(([m, e, list]) => {
+        if (cancelled) return;
+        setMission(m.mission ?? null);
+        setEconomics(e.economics ?? null);
+        setExecutions(
+          (list.executions ?? []).filter((x) => x.missionId === missionId),
+        );
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setMission(null);
+        setEconomics(null);
+        setExecutions([]);
+        setError(err instanceof Error ? err.message : 'Failed to load mission');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, missionId]);
+
+  const failed = useMemo(
+    () => executions.filter((e) => e.status === 'failed' || e.status === 'denied'),
+    [executions],
+  );
+  const costContributors = useMemo(
+    () =>
+      [...executions]
+        .filter((e) => (e.cost?.units ?? 0) > 0)
+        .sort((a, b) => (b.cost?.units ?? 0) - (a.cost?.units ?? 0)),
+    [executions],
+  );
+
+  const lineageRoots = useMemo(() => {
+    const roots = new Map<string, ExecutionObject[]>();
+    for (const e of executions) {
+      const root = e.rootExecutionId ?? e.executionId;
+      const arr = roots.get(root) ?? [];
+      arr.push(e);
+      roots.set(root, arr);
+    }
+    return [...roots.entries()];
+  }, [executions]);
+
+  return (
+    <Shell>
+      <div className="mb-6 text-sm">
+        <Link to="/missions" className="text-muted-foreground hover:text-foreground">
+          ← Mission Control
+        </Link>
+      </div>
+
+      {loading && <p className="text-sm text-muted-foreground animate-pulse-soft">Loading mission…</p>}
+      {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+
+      {mission && (
+        <header className="mb-8 animate-fade-up">
+          <p className="text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground">Mission</p>
+          <h1 className="mt-1 font-display text-3xl md:text-4xl font-semibold tracking-tight">
+            {mission.name}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{mission.status}</Badge>
+            {mission.riskLevel && <Badge variant="outline">{mission.riskLevel}</Badge>}
+            {missionCohortLabel(mission) === 'PRE-OL' && (
+              <Badge variant="outline">PRE-OL</Badge>
+            )}
+            {missionCohortLabel(mission) === 'OL-001' && (
+              <Badge variant="outline">OL-001</Badge>
+            )}
+            <span className="font-mono text-xs text-muted-foreground">{mission.missionId}</span>
+          </div>
+          <p className="mt-3 max-w-2xl text-sm text-muted-foreground">{mission.objective}</p>
+          {mission.metadata && (
+            <dl className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div>
+                <dt className="text-muted-foreground">cohort</dt>
+                <dd className="font-mono">{String(mission.metadata.cohort ?? '—')}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">productionEconomic</dt>
+                <dd className="font-mono">
+                  {String(mission.metadata.productionEconomic ?? '—')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">workflow</dt>
+                <dd className="font-mono truncate">
+                  {String(mission.metadata.workflowTemplateId ?? '—')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">owner</dt>
+                <dd className="font-mono truncate">{mission.owner}</dd>
+              </div>
+            </dl>
+          )}
+        </header>
+      )}
+
+      <section className="mb-10 animate-fade-up" style={{ animationDelay: '80ms' }}>
+        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          Mission economics
+        </h2>
+        {!economics ? (
+          <p className="text-sm text-muted-foreground">No economics rollup from API.</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <MetricLink
+              label="Cost units"
+              value={economics.totalCostUnits}
+              to={costContributors[0] ? `/executions/${costContributors[0].executionId}` : undefined}
+              hint="drill → executions with cost"
+            />
+            <MetricLink
+              label="Failures / denials"
+              value={economics.failureCount + economics.policyDenials}
+              tone="danger"
+              to={failed[0] ? `/executions/${failed[0].executionId}` : undefined}
+            />
+            <MetricLink label="Attributed EV" value={economics.attributedEconomicValue} tone="ok" />
+            <MetricLink label="ROI" value={economics.roi} />
+            <MetricLink label="Executions" value={economics.totalExecutions} />
+            <MetricLink label="Successes" value={economics.successCount} tone="ok" />
+            <MetricLink label="Approvals" value={economics.approvals} tone="warn" />
+            <MetricLink label="Interventions" value={economics.humanInterventions} />
+          </div>
+        )}
+      </section>
+
+      <section className="mb-10 animate-fade-up" style={{ animationDelay: '140ms' }}>
+        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          Cost contributors
+        </h2>
+        {costContributors.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No cost-bearing executions for this mission.</p>
+        ) : (
+          <ul className="divide-y divide-border/70 border border-border/70 rounded-md">
+            {costContributors.map((e) => (
+              <li key={e.executionId}>
+                <Link
+                  to={`/executions/${e.executionId}`}
+                  className="flex justify-between gap-3 px-3 py-2 text-sm hover:bg-accent/30"
+                >
+                  <span className="font-mono text-xs truncate">{e.executionId}</span>
+                  <span className="font-mono tabular-nums">{e.cost?.units ?? 0} u</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mb-10 animate-fade-up" style={{ animationDelay: '200ms' }}>
+        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          Failures
+        </h2>
+        {failed.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No failed/denied executions from API.</p>
+        ) : (
+          <ul className="divide-y divide-border/70 border border-border/70 rounded-md">
+            {failed.map((e) => (
+              <li key={e.executionId}>
+                <Link
+                  to={`/executions/${e.executionId}`}
+                  className="flex justify-between gap-3 px-3 py-2 text-sm hover:bg-accent/30"
+                >
+                  <span className="font-mono text-xs truncate">{e.executionId}</span>
+                  <Badge variant="destructive">{e.status}</Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="animate-fade-up" style={{ animationDelay: '260ms' }}>
+        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          Lineage
+        </h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Mission → Workflow → Execution → Service/Agent (from execution objects)
+        </p>
+        {lineageRoots.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No execution lineage for this mission.</p>
+        ) : (
+          <div className="space-y-4">
+            {lineageRoots.map(([rootId, nodes]) => (
+              <div key={rootId} className="rounded-md border border-border/70 bg-card/40 p-3">
+                <div className="font-mono text-[0.65rem] text-muted-foreground mb-2">
+                  root {rootId}
+                </div>
+                <ol className="space-y-2">
+                  {nodes
+                    .slice()
+                    .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
+                    .map((e) => (
+                      <li key={e.executionId} className="text-sm border-l-2 border-primary/40 pl-3">
+                        <Link
+                          to={`/executions/${e.executionId}`}
+                          className="font-mono text-xs text-primary hover:underline"
+                        >
+                          {e.executionId}
+                        </Link>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          <span>{e.status}</span>
+                          {e.workflowId && <span> · wf {e.workflowId}</span>}
+                          {e.agentUri && <span> · {e.agentUri}</span>}
+                          {e.metadata && typeof e.metadata === 'object' && 'serviceKey' in e.metadata && (
+                            <span> · svc {String((e.metadata as { serviceKey?: string }).serviceKey)}</span>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </Shell>
+  );
+}

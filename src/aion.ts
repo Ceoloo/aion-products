@@ -28,6 +28,10 @@ export interface CreateCopilotOptions {
   effort?: Effort;
   maxTokens?: number;
   crmWriteConfidence?: number;
+  /** Durable Runtime base URL (or set AION_RUNTIME_URL). */
+  runtimeUrl?: string;
+  /** Optional fetch for RuntimeClient (tests). */
+  runtimeFetch?: typeof fetch;
 }
 
 export async function createCopilot(opts: CreateCopilotOptions): Promise<{ copilot: LiveCopilot; exec: AiExecutionService }> {
@@ -40,6 +44,8 @@ export async function createCopilot(opts: CreateCopilotOptions): Promise<{ copil
     ...(opts.effort ? { effort: opts.effort } : {}),
     ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
     ...(opts.crmWriteConfidence !== undefined ? { crmWriteConfidence: opts.crmWriteConfidence } : {}),
+    ...(opts.runtimeUrl ? { runtimeUrl: opts.runtimeUrl } : {}),
+    ...(opts.runtimeFetch ? { runtimeFetch: opts.runtimeFetch } : {}),
   });
   const copilot = await LiveCopilot.begin({ exec, schema, context: opts.context });
   return { copilot, exec };
@@ -50,9 +56,13 @@ export { AiExecutionService } from './platform/ai-execution.ts';
 export type { AiExecutor, AiExecResult } from './platform/ai-execution.ts';
 export { detectProvider, AnthropicProvider, RevenueExecutionAdapter } from './platform/provider-adapter.ts';
 export type { LlmProvider } from './platform/provider-adapter.ts';
+export { OpenRouterProvider } from './platform/providers/openrouter.ts';
 export { LiveCopilot } from './pipeline/copilot.ts';
 export { buildReport } from './pipeline/report.ts';
 export { getSchema, listSchemas } from './config/registry.ts';
 export type { CallIntelligence, TraceSummary } from './domain/report.ts';
 export type { DealState } from './domain/deal.ts';
 export type { LiveUpdate } from './pipeline/copilot.ts';
+export { buildCallOutcomeAttribution } from './platform/outcome.ts';
+export type { CallOutcomeAttribution } from './platform/outcome.ts';
+export { RuntimeClient, RuntimeApiError, runtimeUrlFromEnv } from './platform/runtime-client.ts';

@@ -22,17 +22,35 @@ export interface AssembleParams {
   groundTruth: GroundTruth | null;
 }
 
-export function assembleSessionRecord(p: AssembleParams): SessionRecord {
-  const transcript = p.copilot.getTranscript();
+/** Derive kind / disposition / evaluable from ground truth + live state. */
+export function classifyFromGroundTruth(
+  transcript: SessionRecord['during']['transcript'],
+  finalState: SessionRecord['during']['finalState'],
+  groundTruth: GroundTruth | null,
+): Pick<SessionRecord, 'kind' | 'disposition' | 'evaluable'> {
   const suggestedEvaluable = suggestEvaluable(transcript);
-  const evaluable = p.groundTruth ? p.groundTruth.evaluable : suggestedEvaluable;
-  const kind = p.groundTruth
-    ? p.groundTruth.disposition === 'conversation'
-      ? p.groundTruth.outcome === 'qualified' || p.report.finalState.position.currentOrder >= 2
+  const evaluable = groundTruth ? groundTruth.evaluable : suggestedEvaluable;
+  const kind = groundTruth
+    ? groundTruth.disposition === 'conversation'
+      ? groundTruth.outcome === 'qualified' || finalState.position.currentOrder >= 2
         ? 'qualified_conversation'
         : 'conversation'
       : suggestKind(transcript, evaluable)
     : suggestKind(transcript, suggestedEvaluable);
+  return {
+    kind,
+    disposition: groundTruth?.disposition ?? (evaluable ? 'conversation' : 'no_contact'),
+    evaluable,
+  };
+}
+
+export function assembleSessionRecord(p: AssembleParams): SessionRecord {
+  const transcript = p.copilot.getTranscript();
+  const { kind, disposition, evaluable } = classifyFromGroundTruth(
+    transcript,
+    p.report.finalState,
+    p.groundTruth,
+  );
 
   return {
     sessionId: p.sessionId,
@@ -42,7 +60,7 @@ export function assembleSessionRecord(p: AssembleParams): SessionRecord {
     createdAt: p.createdAt,
     finalizedAt: p.groundTruth ? new Date().toISOString() : null,
     kind,
-    disposition: p.groundTruth?.disposition ?? (evaluable ? 'conversation' : 'no_contact'),
+    disposition,
     evaluable,
     before: {
       conversionStageId: p.context.conversionStageId,
@@ -64,6 +82,32 @@ export function assembleSessionRecord(p: AssembleParams): SessionRecord {
     after: {
       aiOutcome: p.report.outcome,
       groundTruth: p.groundTruth,
+    },
+  };
+}
+
+/**
+ * Re-apply (or clear) ground truth on a persisted SessionRecord and refresh
+ * classification fields. Used by PATCH /api/sessions/:id so reps can correct
+ * a saved call without re-running the live pipeline.
+ */
+export function applyGroundTruthToRecord(
+  record: SessionRecord,
+  groundTruth: GroundTruth | null,
+  now: string = new Date().toISOString(),
+): SessionRecord {
+  const classified = classifyFromGroundTruth(
+    record.during.transcript,
+    record.during.finalState,
+    groundTruth,
+  );
+  return {
+    ...record,
+    ...classified,
+    finalizedAt: groundTruth ? now : null,
+    after: {
+      ...record.after,
+      groundTruth,
     },
   };
 }

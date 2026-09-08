@@ -87,3 +87,168 @@ test('a capability the agent is not granted is denied by @aion/core (deny-by-def
   rogue.engine = 'notgranted'; // → capability "revenue.notgranted", not in the actor's grants
   await assert.rejects(() => exec.run(rogue), /denied/i);
 });
+
+import { buildCallOutcomeAttribution } from '../src/platform/outcome.ts';
+import { serviceKeyForEngine } from '../src/platform/revenue-ai-tasks.ts';
+
+function mockRuntimeFetch(handler: (req: {
+  method: string;
+  url: string;
+  body: Record<string, unknown> | null;
+}) => { status: number; body: unknown }): typeof fetch {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const method = (init?.method ?? 'GET').toUpperCase();
+    let body: Record<string, unknown> | null = null;
+    if (init?.body && typeof init.body === 'string') {
+      body = JSON.parse(init.body) as Record<string, unknown>;
+    }
+    const res = handler({ method, url, body });
+    return new Response(JSON.stringify(res.body), {
+      status: res.status,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+}
+
+test('Runtime mode submits serviceKey and surfaces cost + executionId', async () => {
+  const captured: { body: Record<string, unknown> | null } = { body: null };
+  const fetchFn = mockRuntimeFetch(({ body }) => {
+    captured.body = body;
+    return {
+      status: 200,
+      body: {
+        status: 'completed',
+        run: { runId: 'run_rt_1', correlationId: 'corr_rt_1' },
+        execution: { executionId: 'exec_rt_1', cost: { units: 7, tokens: 42 } },
+        decision: { riskLevel: 'R1', reason: 'allowed' },
+        result: {
+          status: 'succeeded',
+          output: { value: 99 },
+          executor: 'runtime-mock',
+          model: 'mock-model',
+          durationMs: 12,
+          cost: { units: 7, tokens: 42 },
+          metadata: {},
+        },
+      },
+    };
+  });
+
+  const exec = new AiExecutionService({
+    callId: 'c_rt_1',
+    llm: null,
+    runtimeUrl: 'http://runtime.test',
+    runtimeFetch: fetchFn,
+  });
+  assert.equal(exec.usesRuntime, true);
+  assert.throws(() => exec.controlPlane, /unavailable/i);
+
+  const res = await exec.run(doubleTask(1));
+  assert.equal(res.output, 99);
+  assert.equal(res.runId, 'run_rt_1');
+  assert.equal(res.correlationId, 'corr_rt_1');
+  assert.equal(res.executionId, 'exec_rt_1');
+  assert.equal(res.costUnits, 7);
+  assert.equal(res.costTokens, 42);
+  assert.equal(res.fellBack, false);
+  assert.equal(captured.body?.serviceKey, serviceKeyForEngine('extraction'));
+  assert.equal(typeof captured.body?.actor, 'object');
+
+  const ids = exec.attributionIds();
+  assert.deepEqual(ids.runIds, ['run_rt_1']);
+  assert.deepEqual(ids.executionIds, ['exec_rt_1']);
+  assert.equal(ids.totalCostUnits, 7);
+  assert.equal(ids.totalTokens, 42);
+});
+
+test('Runtime mode denied path is enforced', async () => {
+  const fetchFn = mockRuntimeFetch(() => ({
+    status: 200,
+    body: {
+      status: 'denied',
+      decision: { reason: 'capability not granted', riskLevel: 'R1' },
+      run: { runId: 'run_deny', correlationId: 'corr_deny' },
+    },
+  }));
+
+  const exec = new AiExecutionService({
+    callId: 'c_rt_deny',
+    llm: null,
+    runtimeUrl: 'http://runtime.test',
+    runtimeFetch: fetchFn,
+  });
+  await assert.rejects(() => exec.run(doubleTask(1)), /denied/i);
+});
+
+test('Runtime mode awaiting approval surfaces approvalId', async () => {
+  const fetchFn = mockRuntimeFetch(() => ({
+    status: 202,
+    body: {
+      status: 'awaiting_approval',
+      approval: { approvalId: 'appr_1' },
+      decision: { reason: 'risk gate', riskLevel: 'R2' },
+      run: { runId: 'run_appr', correlationId: 'corr_appr' },
+    },
+  }));
+
+  const exec = new AiExecutionService({
+    callId: 'c_rt_appr',
+    llm: null,
+    runtimeUrl: 'http://runtime.test',
+    runtimeFetch: fetchFn,
+  });
+  await assert.rejects(() => exec.run(doubleTask(1)), /approvalId=appr_1/);
+});
+
+test('Runtime stub without output value falls back to deterministic', async () => {
+  const fetchFn = mockRuntimeFetch(() => ({
+    status: 200,
+    body: {
+      status: 'completed',
+      run: { runId: 'run_stub', correlationId: 'corr_stub' },
+      execution: { executionId: 'exec_stub', cost: { units: 3 } },
+      decision: { riskLevel: 'R1' },
+      result: {
+        status: 'succeeded',
+        executor: 'runtime-stub',
+        durationMs: 1,
+        cost: { units: 3 },
+        metadata: {},
+      },
+    },
+  }));
+
+  const exec = new AiExecutionService({
+    callId: 'c_rt_stub',
+    llm: null,
+    runtimeUrl: 'http://runtime.test',
+    runtimeFetch: fetchFn,
+  });
+  const res = await exec.run(doubleTask(21));
+  assert.equal(res.output, 42, 'deterministic fallback');
+  assert.equal(res.fellBack, true);
+  assert.equal(res.costUnits, 3);
+});
+
+test('outcome attribution links run/execution ids and cost', () => {
+  const attribution = buildCallOutcomeAttribution({
+    callId: 'call_1',
+    runIds: ['run_a', 'run_b'],
+    executionIds: ['exec_a'],
+    totalCostUnits: 10,
+    totalTokens: 100,
+    advanced: true,
+    stageBeforeId: 'discovery',
+    stageAfterId: 'proposal',
+    summary: 'Moved to proposal',
+  });
+  assert.equal(attribution.callId, 'call_1');
+  assert.deepEqual(attribution.runIds, ['run_a', 'run_b']);
+  assert.deepEqual(attribution.executionIds, ['exec_a']);
+  assert.equal(attribution.totalCostUnits, 10);
+  assert.equal(attribution.totalTokens, 100);
+  assert.equal(attribution.outcome.advanced, true);
+  assert.equal(attribution.outcome.status, 'realized');
+  assert.equal(attribution.metadata.product, 'revenue-copilot');
+});

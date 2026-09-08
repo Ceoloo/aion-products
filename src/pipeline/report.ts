@@ -4,7 +4,7 @@
  */
 
 import type { LiveCopilot } from './copilot.ts';
-import type { AiExecutionService } from '../platform/ai-execution.ts';
+import type { SharedExecutionService as AiExecutionService } from '../platform/shared-execution.ts';
 import type { SalesSchema } from '../config/schema.ts';
 import type { CallIntelligence, CallOutcome } from '../domain/report.ts';
 import type { Turn } from '../domain/types.ts';

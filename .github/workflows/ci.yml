@@ -5,7 +5,9 @@ on:
   push:
     branches: [main]
 
-# Least privilege: every job here only reads the repo (clone + build + test).
+# Least privilege at the workflow level: the verify/build jobs only read the
+# repo. The `image` job below opts INTO `packages: write` at the job scope so
+# the publish grant never widens the test jobs.
 permissions:
   contents: read
 
@@ -44,6 +46,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
+      - name: bootstrap @aion/core
+        run: npm run setup:core
+      - name: install product dependencies
+        run: npm ci
       - name: install web deps
         working-directory: web
         run: npm ci
@@ -52,6 +58,31 @@ jobs:
         run: npm run typecheck
       - name: build web SPA
         working-directory: web
+        run: npm run build
+      - name: build isolated preview and enforce browser boundary
+        working-directory: web
+        run: npm run build -- --mode preview
+      - name: preview integration checks
+        run: npm --prefix web run test:preview
+
+  workforce-control:
+    name: workforce control center (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: install workforce-control deps
+        working-directory: workforce-control
+        run: npm ci
+      - name: typecheck workforce-control
+        working-directory: workforce-control
+        run: npm run typecheck
+      - name: build workforce-control
+        working-directory: workforce-control
         run: npm run build
 
   synthetic-mission-eval:
@@ -73,3 +104,79 @@ jobs:
       - run: npm ci
       - name: run synthetic Mission-001 gate scorecard
         run: npm run eval
+
+  image:
+    name: build · boot-certify · publish COPILOT_IMAGE
+    # Never publish from a fork/PR — only trusted pushes to main can push
+    # packages. The commit-SHA tag is the immutable ref aion-infra pins as
+    # COPILOT_IMAGE in providers/vps/.env (docker compose --profile revenue-copilot).
+    needs: [verify]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve image references
+        id: refs
+        run: |
+          set -eu
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aion-revenue-copilot"
+          {
+            echo "tags<<EOF"
+            # The commit-SHA tag is ALWAYS published — the immutable ref
+            # aion-infra pins for deploys (providers/vps/.env COPILOT_IMAGE).
+            echo "${repo}:${GITHUB_SHA}"
+            # `:latest` is convenience metadata only, never a deploy truth — it
+            # tracks main, not a release.
+            echo "${repo}:latest"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      # The Dockerfile does `COPY .vendor .vendor` and resolves the
+      # `file:.vendor/aion-core` dependency at build time. `.vendor` is
+      # gitignored and produced here, so it MUST exist in the build context
+      # before `docker build`.
+      - name: Bootstrap @aion/core into the build context
+        run: npm run setup:core
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build ONCE, load into the local daemon, and prove it boots before a
+      # single byte is pushed. CI "build succeeded" is not "artifact deployable".
+      - name: Build image (load for boot-certification)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: aion-revenue-copilot:boot-certify
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot-certify (run → /health/ready → hygiene) — GATE
+        run: bash scripts/image-boot-check.sh aion-revenue-copilot:boot-certify "${GITHUB_SHA}"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Re-runs from the buildx cache produced above — no rebuild — so only the
+      # exact image that passed boot-certification is published.
+      - name: Publish certified image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.refs.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

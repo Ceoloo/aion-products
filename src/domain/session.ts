@@ -126,6 +126,8 @@ export interface GroundTruth {
 }
 
 export interface SessionRecord {
+  /** Sample/rehearsal records must never contribute to production gates. */
+  synthetic?: boolean;
   // ── identity ──────────────────────────────────────────────────────────
   sessionId: string;
   prospectId: string;

@@ -58,6 +58,12 @@ Six real-time responsibilities, each an engine governed by the Core:
 5. **Next-best-action** — the highest-leverage move right now.
 6. **Conversion readiness** — explainable signals, not an opaque percentage.
 
+## Runtime (Week 3)
+
+Set `AION_RUNTIME_URL` to submit governed AI work through durable AION Runtime
+(`POST /v1/commands` + `serviceKey`). Leave it unset for the offline in-memory
+`@aion/core` path used by tests and local demos.
+
 ## Run it
 
 No build step, no API key required. Every AI step is governed by the canonical

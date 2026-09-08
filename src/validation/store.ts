@@ -10,14 +10,22 @@
  * committed.
  */
 
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SessionRecord } from '../domain/session.ts';
 
 export interface SessionStore {
+  /** Create or replace a session record by sessionId. */
   save(record: SessionRecord): Promise<void>;
   get(sessionId: string): Promise<SessionRecord | undefined>;
   list(): Promise<SessionRecord[]>;
+  /**
+   * Replace an existing record. Returns false when the sessionId is unknown
+   * (callers should treat that as HTTP 404 rather than silently creating).
+   */
+  update(record: SessionRecord): Promise<boolean>;
+  /** Remove a persisted record. Returns false when nothing was deleted. */
+  delete(sessionId: string): Promise<boolean>;
 }
 
 export class InMemorySessionStore implements SessionStore {
@@ -32,6 +40,14 @@ export class InMemorySessionStore implements SessionStore {
   }
   async list(): Promise<SessionRecord[]> {
     return [...this.records.values()].map((r) => structuredClone(r));
+  }
+  async update(record: SessionRecord): Promise<boolean> {
+    if (!this.records.has(record.sessionId)) return false;
+    this.records.set(record.sessionId, structuredClone(record));
+    return true;
+  }
+  async delete(sessionId: string): Promise<boolean> {
+    return this.records.delete(sessionId);
   }
 }
 
@@ -82,5 +98,20 @@ export class JsonSessionStore implements SessionStore {
       }
     }
     return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async update(record: SessionRecord): Promise<boolean> {
+    if ((await this.get(record.sessionId)) === undefined) return false;
+    await this.save(record);
+    return true;
+  }
+
+  async delete(sessionId: string): Promise<boolean> {
+    try {
+      await unlink(this.path(sessionId));
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
