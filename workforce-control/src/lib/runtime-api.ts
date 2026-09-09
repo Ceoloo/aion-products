@@ -46,11 +46,14 @@ async function request<T>(
     try {
       body = JSON.parse(text) as unknown;
     } catch {
-      body = { error: 'invalid_json', message: text };
+      throw new RuntimeHttpError(res.status, 'invalid_json', 'Runtime returned a non-JSON response. Check the Runtime URL and gateway routing.');
     }
   }
+  if (!text && res.ok) {
+    throw new RuntimeHttpError(res.status, 'empty_response', 'Runtime returned an empty response. Check the Runtime connection.');
+  }
   if (!res.ok) {
-    const err = body as { error?: string; message?: string };
+    const err = (body && typeof body === 'object' ? body : {}) as { error?: string; message?: string };
     throw new RuntimeHttpError(
       res.status,
       err.error ?? 'http_error',

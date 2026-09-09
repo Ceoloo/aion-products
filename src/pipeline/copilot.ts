@@ -13,7 +13,7 @@
  * → durable record, with full traceability (canonical correlation ids).
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { SalesSchema } from '../config/schema.ts';
 import type { PreCallContext } from '../domain/context.ts';
 import type { DealState, Gap } from '../domain/deal.ts';

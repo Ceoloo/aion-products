@@ -4,7 +4,7 @@
  * not slot values, and feed readiness + next-best-action differently.
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { Turn } from '../domain/types.ts';
 import type { BuyingSignal, Commitment } from '../domain/deal.ts';

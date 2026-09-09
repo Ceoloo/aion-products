@@ -103,6 +103,7 @@ export interface GateStatus {
 }
 
 export interface DashboardMetrics {
+  syntheticSessions: number;
   totalSessions: number;
   totalDials: number;
   evaluableConversations: number;
@@ -122,7 +123,8 @@ export interface DashboardMetrics {
 const TARGETS = { realCalls: 25, factAccuracy: 0.85, objectionAccuracy: 0.85, useful: 0.6, advances: 10, downstream: 3 };
 
 /** Aggregate finalized records into the Mission-001 validation dashboard metrics. */
-export function buildDashboard(records: SessionRecord[]): DashboardMetrics {
+export function buildDashboard(allRecords: SessionRecord[]): DashboardMetrics {
+  const records = allRecords.filter(r => !r.synthetic);
   const scores = records.map(scoreRecord);
   const evaluableFinal = records.filter((r, i) => r.evaluable && scores[i]!.finalized);
   const evalScores = scores.filter((s) => s.evaluable && s.finalized);
@@ -161,6 +163,7 @@ export function buildDashboard(records: SessionRecord[]): DashboardMetrics {
     lineageCompleteness !== null && lineageCompleteness >= 1;
 
   return {
+    syntheticSessions: allRecords.length - records.length,
     totalSessions: records.length,
     totalDials: records.filter((r) => r.kind === 'dial').length,
     evaluableConversations: records.filter((r) => r.evaluable).length,

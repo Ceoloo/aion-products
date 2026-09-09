@@ -74,6 +74,9 @@ export default function App() {
 
   return (
     <CockpitShell room={room} onNav={navGuard} live={live} leadName={leadName || undefined} toast={toast}>
+      {import.meta.env.MODE === 'preview' && <div className="mb-4 rounded-lg border border-amber-400/30 p-3 text-sm text-amber-300" role="status">
+        Sample preview · Deterministic guidance through AION Core. No model calls, Runtime connection, or CRM sync. Active calls reset on refresh; saved samples stay in this tab and never count toward production gates.
+      </div>}
       {room === 'launch' && (
         <LaunchPad
           schemas={schemas}
@@ -129,6 +132,7 @@ export default function App() {
             }}
             onEnd={async () => {
               try {
+                await ingestChain.current;
                 await refresh(sessionId);
               } catch (e: any) {
                 setToast(e.message);

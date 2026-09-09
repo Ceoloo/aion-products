@@ -106,6 +106,7 @@ export function ControlRoom({ onNewCall }: { onNewCall: () => void }) {
       {m && (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            <MetricCard label="Samples (excluded)" value={String(m.syntheticSessions ?? 0)} sub="Not production evidence" />
             <GateCard label="Real conversations" g={m.realCalls} />
             <AccCard label="Fact accuracy" v={m.factAccuracy} target={0.85} />
             <AccCard label="Objection accuracy" v={m.objectionAccuracy} target={0.85} />
@@ -157,7 +158,7 @@ export function ControlRoom({ onNewCall }: { onNewCall: () => void }) {
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted-foreground">
                     {new Date(r.createdAt).toLocaleString()}
                   </td>
-                  <td className="px-3 py-2.5 font-medium">{r.prospect}</td>
+                  <td className="px-3 py-2.5 font-medium">{r.prospect}{r.synthetic && <span className="ml-2 text-xs text-amber-300">Sample</span>}</td>
                   <td className="px-3 py-2.5">{r.industry}</td>
                   <td className="px-3 py-2.5">{titleCase(r.kind)}</td>
                   <td className="px-3 py-2.5">{titleCase(r.disposition)}</td>

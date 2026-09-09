@@ -46,6 +46,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
+      - name: bootstrap @aion/core
+        run: npm run setup:core
+      - name: install product dependencies
+        run: npm ci
       - name: install web deps
         working-directory: web
         run: npm ci
@@ -55,6 +59,11 @@ jobs:
       - name: build web SPA
         working-directory: web
         run: npm run build
+      - name: build isolated preview and enforce browser boundary
+        working-directory: web
+        run: npm run build -- --mode preview
+      - name: preview integration checks
+        run: npm --prefix web run test:preview
 
   workforce-control:
     name: workforce control center (typecheck + build)
@@ -72,6 +81,9 @@ jobs:
       - name: typecheck workforce-control
         working-directory: workforce-control
         run: npm run typecheck
+      - name: Runtime HTTP failure regression
+        working-directory: workforce-control
+        run: node --test test-runtime-api.mjs
       - name: build workforce-control
         working-directory: workforce-control
         run: npm run build

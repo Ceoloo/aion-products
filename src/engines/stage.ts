@@ -5,7 +5,7 @@
  * prospect's emotional read. This is distinct from the deal's ladder position.
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { ConversationStage, Sentiment, Turn } from '../domain/types.ts';
 import { CONVERSATION_STAGES } from '../domain/types.ts';

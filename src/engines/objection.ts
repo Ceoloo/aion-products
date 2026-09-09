@@ -7,7 +7,7 @@
  * to very different concerns, which is why interpretation matters.
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { Turn } from '../domain/types.ts';
 import type { Objection, ObjectionCategory } from '../domain/deal.ts';

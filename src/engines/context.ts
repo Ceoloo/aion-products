@@ -6,7 +6,7 @@
  * live state.
  */
 
-import type { AiExecutor } from '../platform/ai-execution.ts';
+import type { AiExecutor } from '../platform/shared-execution.ts';
 import type { AiTask } from '../platform/revenue-ai-tasks.ts';
 import type { PreCallContext } from '../domain/context.ts';
 import { extractJson } from './lib/text.ts';

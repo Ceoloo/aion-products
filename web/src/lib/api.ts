@@ -41,10 +41,14 @@ function readToken(): string {
   }
 }
 
-const TOKEN = readToken();
+const TOKEN = import.meta.env.MODE === 'preview' ? '' : readToken();
 
 /** Same-origin JSON fetch helper: forwards the LAN token and throws on non-2xx. */
 async function api<T = any>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET', body?: unknown): Promise<T> {
+  if (import.meta.env.MODE === 'preview') {
+    const { previewApi } = await import('./preview-api');
+    return previewApi(path, method, body) as Promise<T>;
+  }
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (TOKEN) headers['x-aion-token'] = TOKEN;
@@ -86,12 +90,14 @@ export interface SchemaInfo { key: string; label: string; conversionEventNoun: s
 export interface IngestResult { state: DealState; recommendations: Recommendation[]; ingested: number; turns?: Turn[] }
 export interface GateStatus { value: number; target: number; met: boolean }
 export interface DashboardMetrics {
+  syntheticSessions?: number;
   totalSessions: number; totalDials: number; evaluableConversations: number;
   realCalls: GateStatus; factAccuracy: number | null; objectionAccuracy: number | null;
   usefulInterventionRate: number | null; conversionAdvances: GateStatus; downstreamConversions: GateStatus;
   lineageCompleteness: number | null; dispositions: Record<string, number>; gatesMet: boolean;
 }
 export interface DashboardRecord {
+  synthetic?: boolean;
   sessionId: string; createdAt: string; prospect: string; industry: string; kind: string;
   disposition: string; evaluable: boolean; finalized: boolean; outcome: string | null; advanced: boolean; aiStage: string;
 }
