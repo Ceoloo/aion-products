@@ -81,6 +81,9 @@ jobs:
       - name: typecheck workforce-control
         working-directory: workforce-control
         run: npm run typecheck
+      - name: Runtime HTTP failure regression
+        working-directory: workforce-control
+        run: node --test test-runtime-api.mjs
       - name: build workforce-control
         working-directory: workforce-control
         run: npm run build
