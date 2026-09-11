@@ -122,14 +122,20 @@ export default function HoldingOverview() {
         <p className="mt-3 max-w-xl text-sm md:text-base text-muted-foreground">
           Holding view of the machine workforce. Metrics resolve from Runtime
           economics — never invented dashboard state. Current phase:{' '}
-          <strong className="font-medium text-foreground">PRE-OL validation</strong>{' '}
-          (OL-001 live). Cohort heartbeat stays honest at{' '}
+          <strong className="font-medium text-foreground">OL-001 production</strong>
+          {' '}— Console launches still default to PRE-OL; use explicit{' '}
+          <strong className="font-medium text-foreground">OL-001 Production</strong>{' '}
+          mode for scoreboard credit. Cohort heartbeat:{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/ol001">
             OL-001 scoreboard
-          </Link>{' '}
-          (0 / 100 until productionEconomic missions). Operate from{' '}
+          </Link>
+          . Operate from{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/missions">
             Mission Control
+          </Link>{' '}
+          or{' '}
+          <Link className="text-primary underline-offset-2 hover:underline" to="/missions/new">
+            New Mission
           </Link>
           .
         </p>

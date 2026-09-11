@@ -167,7 +167,7 @@ export default function Ol001Scoreboard() {
         </p>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
           <Link className="text-primary underline-offset-2 hover:underline" to="/missions/new">
-            + New Mission (PRE-OL)
+            + Launch mission (PRE-OL or OL-001 Production)
           </Link>
           <Link className="text-muted-foreground hover:text-foreground" to="/missions">
             Mission Control
