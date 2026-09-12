@@ -1,6 +1,6 @@
 /** Server composition: resolve environment defaults and construct HTTP transports. */
 import { SharedExecutionService, type SharedExecutionConfig } from './shared-execution.ts';
-import { RuntimeClient, runtimeUrlFromEnv } from './runtime-client.ts';
+import { RuntimeClient, resolveRuntimeUrl } from './runtime-client.ts';
 import type { Effort } from './provider-contracts.ts';
 export type { AiExecutor, AiExecResult } from './shared-execution.ts';
 
@@ -11,7 +11,9 @@ export interface AiExecutionConfig extends Omit<SharedExecutionConfig, 'runtime'
 
 export class AiExecutionService extends SharedExecutionService {
   constructor(cfg: AiExecutionConfig) {
-    const runtimeUrl = cfg.runtimeUrl ?? runtimeUrlFromEnv();
+    // Explicit runtimeUrl (including "") wins; otherwise apply ADR-007 fail-closed resolve.
+    const runtimeUrl =
+      cfg.runtimeUrl !== undefined ? cfg.runtimeUrl.trim() || undefined : resolveRuntimeUrl();
     super({
       ...cfg,
       model: cfg.model ?? process.env.AION_MODEL ??
