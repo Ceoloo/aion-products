@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
+import { ErrorState, LoadState } from '@/components/WorkflowState';
 import { ApprovalPanel } from '@/components/ApprovalPanel';
 import { useTenant } from '@/hooks/useTenant';
 import {
@@ -178,10 +179,10 @@ export default function Ol001Scoreboard() {
             Mission Control
           </Link>
         </div>
-        {loading && (
-          <p className="mt-4 text-sm text-muted-foreground animate-pulse-soft">Loading…</p>
+        {loading && <LoadState label="Loading OL-001 scoreboard…" />}
+        {error && (
+          <ErrorState message={error} onRetry={() => setTick((x) => x + 1)} />
         )}
-        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
       </header>
 
       <div className="space-y-8 animate-fade-up" style={{ animationDelay: '40ms' }}>

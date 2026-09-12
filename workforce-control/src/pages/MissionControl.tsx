@@ -8,6 +8,7 @@ import { RuntimeApi } from '@/lib/runtime-api';
 import type { ApprovalRequest, EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { EmptyState, ErrorState, LoadState } from '@/components/WorkflowState';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'failed' | 'paused';
 
@@ -126,10 +127,10 @@ export default function MissionControl() {
           </Link>
           .
         </p>
-        {loading && (
-          <p className="mt-4 text-sm text-muted-foreground animate-pulse-soft">Loading…</p>
+        {loading && <LoadState label="Loading missions…" />}
+        {error && (
+          <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
         )}
-        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
       </header>
 
       <section className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-2 animate-fade-up">
@@ -166,7 +167,16 @@ export default function MissionControl() {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No missions match this filter.</p>
+        <EmptyState
+          title={missions.length === 0 ? 'No missions yet' : 'No missions match this filter'}
+          detail={
+            missions.length === 0
+              ? 'Launch a governed mission via Runtime to populate Mission Control.'
+              : 'Clear filters or switch tenant if you expected work here.'
+          }
+          actionTo={missions.length === 0 ? '/missions/new' : undefined}
+          actionLabel={missions.length === 0 ? 'Launch mission' : undefined}
+        />
       ) : (
         <ul className="divide-y divide-border/70 border border-border/70 rounded-md overflow-hidden animate-fade-up">
           {filtered.map((m) => {

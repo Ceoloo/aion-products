@@ -3,8 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
-import type { ExecutionObject, OutcomeRecord } from '@/lib/types';
+import type { ApprovalRequest, ExecutionObject, OutcomeRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { ApprovalPanel } from '@/components/ApprovalPanel';
+import { ErrorState, LoadState } from '@/components/WorkflowState';
 
 /**
  * Execution Detail — full canonical Execution Object fields from API.
@@ -17,6 +19,9 @@ export default function ExecutionDetail() {
   const [outcomes, setOutcomes] = useState<OutcomeRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!executionId) return;
@@ -63,7 +68,27 @@ export default function ExecutionDetail() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId, executionId]);
+  }, [tenantId, executionId, tick]);
+
+  useEffect(() => {
+    if (!executionId) return;
+    let cancelled = false;
+    RuntimeApi.listApprovals(tenantId, 'pending')
+      .then((body) => {
+        if (cancelled) return;
+        setApprovals(
+          (body.approvals ?? []).filter(
+            (a) => a.executionId === executionId || a.missionId === execution?.missionId,
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setApprovals([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, executionId, execution?.missionId, tick]);
 
   const rows: Array<[string, ReactNode]> = execution
     ? [
@@ -150,7 +175,10 @@ export default function ExecutionDetail() {
     : [];
 
   return (
-    <Shell>
+    <Shell
+      onOpenApprovals={() => setPanelOpen(true)}
+      pendingCount={approvals.length}
+    >
       <div className="mb-6 text-sm flex gap-3">
         <Link to="/missions" className="text-muted-foreground hover:text-foreground">
           ← Mission Control
@@ -165,10 +193,10 @@ export default function ExecutionDetail() {
         )}
       </div>
 
-      {loading && (
-        <p className="text-sm text-muted-foreground animate-pulse-soft">Loading execution…</p>
+      {loading && <LoadState label="Loading execution…" />}
+      {error && (
+        <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} className="mb-4" />
       )}
-      {error && <p className="text-sm text-destructive mb-4">{error}</p>}
 
       {execution && (
         <>
@@ -271,6 +299,16 @@ export default function ExecutionDetail() {
           </section>
         </>
       )}
+      <ApprovalPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        approvals={approvals}
+        loading={loading}
+        error={error}
+        tenantId={tenantId}
+        onDecided={() => setTick((t) => t + 1)}
+      />
     </Shell>
   );
 }
+

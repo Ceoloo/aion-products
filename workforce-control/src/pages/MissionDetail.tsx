@@ -5,9 +5,11 @@ import { MetricLink } from '@/components/MetricLink';
 import { useTenant } from '@/hooks/useTenant';
 import { missionCohortLabel, isCompletedWithException } from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
-import type { EconomicsRollup, ExecutionObject, Mission, OutcomeRecord } from '@/lib/types';
+import type { ApprovalRequest, EconomicsRollup, ExecutionObject, Mission, OutcomeRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ApprovalPanel } from '@/components/ApprovalPanel';
+import { ErrorState, LoadState } from '@/components/WorkflowState';
 
 /**
  * Mission Detail — economics + lineage from API only.
@@ -26,6 +28,9 @@ export default function MissionDetail() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [waiverReason, setWaiverReason] = useState('GHL HTTP 422');
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!missionId) return;
@@ -40,8 +45,11 @@ export default function MissionDetail() {
         outcomes: [] as OutcomeRecord[],
         count: 0,
       })),
+      RuntimeApi.listApprovals(tenantId, 'pending').catch(() => ({
+        approvals: [] as ApprovalRequest[],
+      })),
     ])
-      .then(([m, e, list, out]) => {
+      .then(([m, e, list, out, appr]) => {
         if (cancelled) return;
         setMission(m.mission ?? null);
         setEconomics(e.economics ?? null);
@@ -49,6 +57,9 @@ export default function MissionDetail() {
           (list.executions ?? []).filter((x) => x.missionId === missionId),
         );
         setOutcomes(out.outcomes ?? []);
+        setApprovals(
+          (appr.approvals ?? []).filter((a) => a.missionId === missionId),
+        );
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -64,7 +75,7 @@ export default function MissionDetail() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId, missionId]);
+  }, [tenantId, missionId, tick]);
 
   const failed = useMemo(
     () => executions.filter((e) => e.status === 'failed' || e.status === 'denied'),
@@ -167,15 +178,18 @@ export default function MissionDetail() {
     }
   }
   return (
-    <Shell>
+    <Shell
+      onOpenApprovals={() => setPanelOpen(true)}
+      pendingCount={approvals.length}
+    >
       <div className="mb-6 text-sm">
         <Link to="/missions" className="text-muted-foreground hover:text-foreground">
           ← Mission Control
         </Link>
       </div>
 
-      {loading && <p className="text-sm text-muted-foreground animate-pulse-soft">Loading mission…</p>}
-      {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+      {loading && <LoadState label="Loading mission…" />}
+      {error && <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} className="mb-4" />}
 
       {mission && (
         <header className="mb-8 animate-fade-up">
@@ -470,6 +484,16 @@ export default function MissionDetail() {
           </div>
         )}
       </section>
+      <ApprovalPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        approvals={approvals}
+        loading={loading}
+        error={error}
+        tenantId={tenantId}
+        onDecided={() => setTick((t) => t + 1)}
+      />
     </Shell>
   );
 }
+
