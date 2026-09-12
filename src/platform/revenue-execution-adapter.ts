@@ -57,6 +57,9 @@ export class RevenueExecutionAdapter implements ExecutionAdapter {
     let model = 'deterministic';
     let tokensIn: number | null = null;
     let tokensOut: number | null = null;
+    let latencyMs: number | null = null;
+    let costUnits: number | null = null;
+    let providerName = 'deterministic';
     let fellBack = false;
 
     if (this.deps.llm) {
@@ -72,10 +75,14 @@ export class RevenueExecutionAdapter implements ExecutionAdapter {
         model = resp.model;
         tokensIn = resp.tokensIn;
         tokensOut = resp.tokensOut;
+        latencyMs = resp.latencyMs;
+        costUnits = resp.costUnits;
+        providerName = resp.provider || this.deps.llm.name;
         output = task.parse(resp.text);
       } catch {
         fellBack = true;
         model = 'deterministic';
+        providerName = 'deterministic';
         output = task.deterministic(task.input);
       }
     } else {
@@ -98,8 +105,12 @@ export class RevenueExecutionAdapter implements ExecutionAdapter {
         engine: task.engine,
         kind: task.kind,
         turnIndex: task.turnIndex,
-        provider: fellBack || !this.deps.llm ? 'deterministic' : 'anthropic',
+        provider: fellBack || !this.deps.llm ? 'deterministic' : providerName,
         fellBack,
+        ...(latencyMs !== null ? { latencyMs } : {}),
+        ...(costUnits !== null ? { costUnits } : {}),
+        ...(tokensIn !== null ? { tokensIn } : {}),
+        ...(tokensOut !== null ? { tokensOut } : {}),
       },
     };
   }

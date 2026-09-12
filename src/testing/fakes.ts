@@ -4,6 +4,7 @@
  */
 
 import type { LlmProvider, LlmRequest, LlmResponse } from '../platform/provider-adapter.ts';
+import { successTelemetry } from '../platform/provider-contracts.ts';
 
 /** Always throws — used to prove execution falls back to the deterministic path. */
 export class ThrowingLlm implements LlmProvider {
@@ -29,6 +30,12 @@ export class ScriptedLlm implements LlmProvider {
   }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {
-    return { text: this.responder(req), model: this.model, tokensIn: 123, tokensOut: 45 };
+    return {
+      text: this.responder(req),
+      model: this.model,
+      tokensIn: 123,
+      tokensOut: 45,
+      ...successTelemetry(this.name, 1, null),
+    };
   }
 }

@@ -53,6 +53,12 @@ test('builds an OpenAI-compatible request and parses the completion', async () =
   assert.equal(res.model, 'anthropic/claude-3.5-sonnet');
   assert.equal(res.tokensIn, 11);
   assert.equal(res.tokensOut, 4);
+  // RES-001 telemetry (required for OL live-model proof).
+  assert.equal(res.provider, 'openrouter');
+  assert.equal(res.ok, true);
+  assert.equal(res.errorCode, null);
+  assert.ok(typeof res.latencyMs === 'number' && res.latencyMs >= 0);
+  assert.equal(res.costUnits, null);
 
   // Request shape: OpenAI-compatible messages, model, max_tokens, bearer auth.
   assert.equal(calls.length, 1, 'fetch was called exactly once');

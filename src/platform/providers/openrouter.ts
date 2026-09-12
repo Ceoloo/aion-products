@@ -13,6 +13,7 @@
  */
 
 import type { LlmProvider, LlmRequest, LlmResponse } from '../provider-adapter.ts';
+import { successTelemetry } from '../provider-contracts.ts';
 
 /**
  * The minimal slice of `fetch` this provider needs. Declared structurally so the
@@ -53,6 +54,7 @@ export class OpenRouterProvider implements LlmProvider {
   }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {
+    const started = Date.now();
     const resp = await this.fetchImpl(this.baseUrl, {
       method: 'POST',
       headers: {
@@ -79,11 +81,15 @@ export class OpenRouterProvider implements LlmProvider {
 
     const data = (await resp.json()) as ChatCompletion;
     const text = data.choices?.[0]?.message?.content ?? '';
+    // OpenRouter may include a usage cost in native units; capture when present.
+    const costRaw = (data as { usage?: { cost?: number } }).usage?.cost;
+    const costUnits = typeof costRaw === 'number' && Number.isFinite(costRaw) ? costRaw : null;
     return {
       text,
       model: data.model ?? req.model,
       tokensIn: data.usage?.prompt_tokens ?? null,
       tokensOut: data.usage?.completion_tokens ?? null,
+      ...successTelemetry(this.name, Date.now() - started, costUnits),
     };
   }
 }
