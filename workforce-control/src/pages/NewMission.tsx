@@ -26,6 +26,8 @@ export const MODERNRELX_M001 = {
   leadName: 'Annfiera McPherson',
   contactId: 'MyWCgeFaKnifp6LM7yIc',
   opportunityId: 'rGbIyrAvGDcmMEzjBER4',
+  pipelineId: 'tPuXeG6L39PgMZp0jEV3',
+  stageId: 'fdd0844f-4260-4522-a8f3-87d361dfb5fa',
   missionOrdinal: 1,
   cohortTarget: 100,
 } as const;
@@ -189,12 +191,22 @@ export default function NewMission() {
         description: template.description,
         steps: template.steps
           .filter((s) => !s.humanOperated)
-          .map(({ name: stepName, capability, riskLevel, description }) => ({
-            name: stepName,
-            capability,
-            riskLevel,
-            description,
-          })),
+          .map(({ name: stepName, capability, riskLevel, description }) => {
+            // Entity-state: existing opportunityId → update, else create.
+            const resolvedCapability =
+              stepName === 'opportunity' &&
+              capability === 'crm.opportunity.create' &&
+              isProduction &&
+              MODERNRELX_M001.opportunityId
+                ? 'crm.opportunity.update'
+                : capability;
+            return {
+              name: stepName,
+              capability: resolvedCapability,
+              riskLevel,
+              description,
+            };
+          }),
         metadata: {
           templateId: template.id,
           cohort,
@@ -239,6 +251,11 @@ export default function NewMission() {
             ? {
                 contactId: MODERNRELX_M001.contactId,
                 opportunityId: MODERNRELX_M001.opportunityId,
+                pipelineId: MODERNRELX_M001.pipelineId,
+                stage: MODERNRELX_M001.stageId,
+                stageId: MODERNRELX_M001.stageId,
+                status: 'open',
+                value: 500,
               }
             : {}),
           ...(leadEmail.trim() ? { contactEmail: leadEmail.trim() } : {}),
@@ -249,6 +266,8 @@ export default function NewMission() {
             ? `Book appointment — ${MODERNRELX_M001.leadName}`
             : 'Book appointment (human)',
           body: 'SA-STD-001: human books appointment until crm.appointment.* is active',
+          // GHL contact tasks require dueDate.
+          dueDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
           ...(isProduction ? { contactId: MODERNRELX_M001.contactId } : {}),
         },
         'crm-note': {
