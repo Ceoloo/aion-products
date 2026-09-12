@@ -61,23 +61,37 @@ From repo root:
 - `npm run workforce:build`
 - `npm run workforce:typecheck`
 
-## Production (after OPS-001)
+## Production (live)
+
+| | |
+|---|---|
+| Console | https://aion-operator-console.vercel.app |
+| Runtime | `VITE_AION_RUNTIME_URL` baked at build (currently Hostinger Runtime) |
+| Tenant hint | `aion-systems` (`VITE_AION_TENANT_ID`) — **not authority** |
+
+Deep links (`/ol001`, `/missions/:id`, …) require SPA rewrites in `vercel.json`
+(already configured). After deploy, confirm `/ol001` returns the app shell (not
+Vercel `NOT_FOUND`).
+
+### Production (after OPS-001)
 
 Do **not** deploy this Console against a stub Runtime.
 
 1. Complete [OPS-001](https://github.com/Ceoloo/aion-docs/blob/cursor/execution-object-agent-identity-6743/roadmap/ops-001-live-runtime.md) —
-   live `https://runtime.aionsystems.ai` behind Traefik with health green.
-2. Create Vercel project `aion-operator-console` from `workforce-control/`.
+   live Runtime behind Traefik with health green (Hostinger Runtime is the current production endpoint until `runtime.aionsystems.ai` DNS is cut over).
+2. Vercel project `aion-operator-console` Root Directory = `workforce-control`.
 3. Build-time env:
 
 | Variable | Value |
 |---|---|
-| `VITE_AION_RUNTIME_URL` | `https://runtime.aionsystems.ai` |
+| `VITE_AION_RUNTIME_URL` | Production Runtime origin (Hostinger URL today) |
 | `VITE_AION_TENANT_ID` | default tenant hint (e.g. `aion-systems`) — **not authority** |
 | `VITE_AION_OPERATOR_ID` | `decidedBy` hint — **not authority** |
 
-4. On Runtime `/opt/aion/.env`, set `AION_CORS_ORIGINS` to the exact Vercel origin(s)
-   and redeploy the Runtime image that includes CORS support.
+4. On Runtime `/opt/aion/.env`, set `AION_CORS_ORIGINS` to include
+   `https://aion-operator-console.vercel.app` (and preview origins if needed).
+   Runtime CORS methods must allow `GET, POST, PATCH, OPTIONS` so mission close
+   works from the browser.
 
 Tenant isolation and actor authorization remain Gateway + Core policy. The UI
 only calls governed APIs.
@@ -87,4 +101,3 @@ only calls governed APIs.
 - Policy-aware retry (refuse when side effects may not be idempotent)
 - Console v2 from OL-001 operator behavior
 - Do **not** start OL-002 until 100/100 baseline exists
-- Do **not** wire Vercel until OPS-001 health checks pass
