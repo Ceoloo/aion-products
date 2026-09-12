@@ -60,8 +60,12 @@ export interface RuntimeTransport {
   submitCommand(input: SubmitCommandRequest): Promise<RuntimeCommandResponse>;
 }
 
-/** Durable business outcome — mirrors aion-data CreateOutcomeInput / OutcomeRecord. */
-export type OutcomeStatus = 'pending' | 'realized' | 'failed' | 'cancelled';
+/**
+ * Durable business outcome status — MUST match Core `OUTCOME_STATUSES`
+ * (`pending` | `realized` | `failed` | `unknown`). Do not invent product-local
+ * values such as `cancelled` (that is a Mission/Run state, not an Outcome status).
+ */
+export type OutcomeStatus = 'pending' | 'realized' | 'failed' | 'unknown';
 
 export interface CreateOutcomeInput {
   runId: string;
@@ -89,7 +93,7 @@ export interface OutcomeRecord {
   outcomeId: string;
   runId: string;
   missionId?: string;
-  status: OutcomeStatus | string;
+  status: OutcomeStatus;
   outcomeType?: string;
   externalReference?: string;
   value?: number;

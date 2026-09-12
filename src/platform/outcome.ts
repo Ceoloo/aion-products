@@ -24,7 +24,7 @@ export interface CallOutcomeAttribution {
   /** Product-domain outcome summary (stage advance, conversion, etc.). */
   outcome: {
     type: string;
-    status: 'pending' | 'realized' | 'failed' | 'cancelled';
+    status: 'pending' | 'realized' | 'failed' | 'unknown';
     advanced: boolean;
     stageBeforeId?: string;
     stageAfterId?: string;
