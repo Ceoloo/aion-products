@@ -7,6 +7,7 @@ import { missionCohortLabel, isCompletedWithException } from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 /**
  * Mission Detail — economics + lineage from API only.
@@ -21,6 +22,9 @@ export default function MissionDetail() {
   const [executions, setExecutions] = useState<ExecutionObject[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [waiverReason, setWaiverReason] = useState('GHL HTTP 422');
 
   useEffect(() => {
     if (!missionId) return;
@@ -89,6 +93,72 @@ export default function MissionDetail() {
       ? 'completed_with_exception'
       : mission.status
     : null;
+
+  async function reloadMission() {
+    const m = await RuntimeApi.getMission(tenantId, missionId);
+    setMission(m.mission ?? null);
+  }
+
+  async function closeMission(mode: 'completed' | 'completed_with_exception') {
+    if (!mission) return;
+    setClosing(true);
+    setCloseError(null);
+    try {
+      const approvals = economics?.approvals ?? 0;
+      const executionCount = economics?.totalExecutions ?? executions.length;
+      const costUnits = economics?.totalCostUnits ?? 0;
+      if (mode === 'completed') {
+        await RuntimeApi.patchMission(tenantId, mission.missionId, {
+          status: 'completed',
+          metadata: {
+            outcomeStatus: 'completed',
+            terminalOutcome: {
+              status: 'completed',
+              approvals,
+              executions: executionCount,
+              executionCostUnits: costUnits,
+              humanIntervention: 'recorded',
+              closedAt: new Date().toISOString(),
+              closedFrom: 'operator-console',
+            },
+          },
+        });
+      } else {
+        const reason = waiverReason.trim() || 'GHL HTTP 422';
+        await RuntimeApi.patchMission(tenantId, mission.missionId, {
+          status: 'completed',
+          metadata: {
+            outcomeStatus: 'completed_with_exception',
+            terminalOutcome: {
+              status: 'completed_with_exception',
+              approvals,
+              executions: executionCount,
+              executionCostUnits: costUnits,
+              humanIntervention: 'recorded',
+              waivedStep: 'crm.task.create',
+              reason,
+              steps: {
+                opportunityProgression: 'PASS',
+                crmNote: 'PASS',
+                draftMessage: 'PASS',
+                taskCreate: `WAIVED — ${reason}`,
+              },
+              workflowDefectFound: 'create-vs-update routing',
+              workflowDefectFixed: true,
+              externalIntegrationDefect: 'crm.task.create / GHL',
+              closedAt: new Date().toISOString(),
+              closedFrom: 'operator-console',
+            },
+          },
+        });
+      }
+      await reloadMission();
+    } catch (err: unknown) {
+      setCloseError(err instanceof Error ? err.message : 'Failed to close mission');
+    } finally {
+      setClosing(false);
+    }
+  }
   return (
     <Shell>
       <div className="mb-6 text-sm">
@@ -143,6 +213,48 @@ export default function MissionDetail() {
             </dl>
           )}
         </header>
+      )}
+
+      {mission && mission.status === 'active' && !terminalOutcome && (
+        <section className="mb-10 animate-fade-up" style={{ animationDelay: '20ms' }}>
+          <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+            Close mission
+          </h2>
+          <p className="mb-3 text-xs text-muted-foreground max-w-2xl">
+            After the single evidence-driven <span className="font-mono">crm.task.create</span> retry:
+            close normally on success, or record a visible exception waiver on 422.
+            Do not leave M001 active.
+          </p>
+          <div className="space-y-3 rounded-md border border-border/70 p-3 max-w-xl">
+            <label className="block text-xs text-muted-foreground">
+              Waiver reason (used only for completed_with_exception)
+              <input
+                className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs"
+                value={waiverReason}
+                onChange={(e) => setWaiverReason(e.target.value)}
+                placeholder="GHL HTTP 422 — exact body"
+              />
+            </label>
+            {closeError && <p className="text-sm text-destructive">{closeError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                disabled={closing}
+                onClick={() => void closeMission('completed')}
+              >
+                {closing ? 'Closing…' : 'Close — completed'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={closing}
+                onClick={() => void closeMission('completed_with_exception')}
+              >
+                Close — completed_with_exception
+              </Button>
+            </div>
+          </div>
+        </section>
       )}
 
       {terminalOutcome && (
