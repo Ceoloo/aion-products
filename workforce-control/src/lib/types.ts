@@ -145,6 +145,7 @@ export interface OutcomeRecord {
   outcomeId: string;
   runId: string;
   missionId?: string;
+  /** Core OutcomeStatus: pending | realized | failed | unknown — never product-local forks. */
   status: string;
   outcomeType?: string;
   externalReference?: string;
