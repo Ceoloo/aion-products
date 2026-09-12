@@ -34,6 +34,14 @@ import {
 import type { ContextInput } from './engines/context.ts';
 import type { Turn } from './domain/types.ts';
 import type { RepFeedback } from './domain/recommendation.ts';
+import {
+  buildCallOutcomeAttribution,
+  publishCallOutcome,
+} from './platform/outcome.ts';
+import { RuntimeClient, runtimeUrlFromEnv } from './platform/runtime-client.ts';
+import { createSessionStore } from './validation/runtime-session-store.ts';
+import type { SessionStore } from './validation/store.ts';
+import { assembleSessionRecord } from './validation/record.ts';
 
 const SERVICE = 'aion-revenue-copilot';
 const PORT = Number(process.env.PORT ?? 8080);
@@ -47,6 +55,12 @@ const LOG_LEVEL = (process.env.LOG_LEVEL ?? 'info') as
   | 'warn'
   | 'error';
 const SESSION_TTL_MS = Number(process.env.COPILOT_SESSION_TTL_MS ?? 60 * 60 * 1000);
+const RUNTIME_URL = runtimeUrlFromEnv();
+const runtimeClient = RUNTIME_URL ? new RuntimeClient({ baseUrl: RUNTIME_URL }) : null;
+/** Durable session checkpoints when Runtime is configured; else in-memory only. */
+const durableStore: SessionStore | null = RUNTIME_URL
+  ? createSessionStore({ runtimeUrl: RUNTIME_URL })
+  : null;
 
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 } as const;
 
@@ -74,6 +88,7 @@ interface Session {
   id: string;
   callId: string;
   industry: string;
+  context: ContextInput;
   copilot: LiveCopilot;
   exec: AiExecutionService;
   createdAt: number;
@@ -271,6 +286,7 @@ async function handle(
         id: sessionId,
         callId,
         industry,
+        context,
         copilot,
         exec,
         createdAt: now,
@@ -431,10 +447,68 @@ async function handle(
       session.finished = true;
       const schema = getSchema(session.industry);
       const report = buildReport(session.copilot, session.exec, schema);
+
+      let businessOutcome: { outcomeId?: string; skipped?: string } | null = null;
+      const ids = session.exec.attributionIds();
+      if (runtimeClient && ids.runIds.length > 0) {
+        const attribution = buildCallOutcomeAttribution({
+          callId: session.callId,
+          runIds: ids.runIds,
+          executionIds: ids.executionIds,
+          totalCostUnits: ids.totalCostUnits,
+          ...(ids.totalTokens !== undefined ? { totalTokens: ids.totalTokens } : {}),
+          advanced: report.outcome.advanced,
+          stageBeforeId: report.outcome.stageBeforeId,
+          stageAfterId: report.outcome.stageAfterId,
+        });
+        try {
+          const outcome = await publishCallOutcome(runtimeClient, attribution);
+          businessOutcome = outcome
+            ? { outcomeId: outcome.outcomeId }
+            : { skipped: 'no_run_ids' };
+        } catch (e) {
+          log('warn', 'outcome_publish_failed', {
+            callId: session.callId,
+            error: e instanceof Error ? e.message : String(e),
+          });
+          businessOutcome = { skipped: 'publish_failed' };
+        }
+      } else if (!runtimeClient) {
+        businessOutcome = { skipped: 'runtime_unset' };
+      } else {
+        businessOutcome = { skipped: 'no_run_ids' };
+      }
+
+      // Best-effort durable session final when Runtime session store is wired.
+      if (durableStore) {
+        try {
+          const record = assembleSessionRecord({
+            sessionId: session.id,
+            prospectId: session.context.prospect.id,
+            repId: 'api',
+            industry: session.industry,
+            createdAt: new Date(session.createdAt).toISOString(),
+            context: session.context,
+            copilot: session.copilot,
+            report,
+            groundTruth: null,
+          });
+          // Mark finished for Runtime final_record path even without rep GT.
+          record.finalizedAt = new Date().toISOString();
+          await durableStore.save(record);
+        } catch (e) {
+          log('warn', 'session_persist_failed', {
+            sessionId: session.id,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
       done(200, {
         sessionId: session.id,
         callId: session.callId,
         report,
+        ...(businessOutcome ? { businessOutcome } : {}),
       });
       return;
     }

@@ -1,9 +1,10 @@
 /**
  * Session record persistence.
  *
- * A port + two adapters, mirroring @aion/core's persistence-port philosophy:
- * the harness depends on the SessionStore interface, and a durable backend
- * (future aion-data) can replace the filesystem store without touching callers.
+ * A port + adapters, mirroring @aion/core's persistence-port philosophy:
+ * the harness depends on the SessionStore interface. Durable production
+ * persistence goes through Runtime's revenue-sessions API (see
+ * runtime-session-store.ts). Json/InMemory remain for offline / local console.
  *
  * NOTE: real call records contain PII (transcripts, prospect data). The JSON
  * store writes under a git-ignored data directory; these files must never be

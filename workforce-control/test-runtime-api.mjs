@@ -27,6 +27,27 @@ test('Runtime client reports gateway failures instead of a successful empty dash
     }
     globalThis.fetch = async () => new Response('{"missions":[]}');
     assert.deepEqual(await RuntimeApi.listMissions('test'), { missions: [] });
+
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      assert.match(url, /\/v1\/outcomes\?missionId=m1/);
+      return new Response(JSON.stringify({
+        outcomes: [{ outcomeId: 'out_1', runId: 'run_1', status: 'realized', outcomeType: 'revenue.call' }],
+        count: 1,
+      }));
+    };
+    const listed = await RuntimeApi.listOutcomes('test', { missionId: 'm1' });
+    assert.equal(listed.count, 1);
+    assert.equal(listed.outcomes[0].outcomeId, 'out_1');
+
+    globalThis.fetch = async (input) => {
+      assert.match(String(input), /\/v1\/outcomes\/out_1$/);
+      return new Response(JSON.stringify({
+        outcome: { outcomeId: 'out_1', runId: 'run_1', status: 'pending' },
+      }));
+    };
+    const got = await RuntimeApi.getOutcome('test', 'out_1');
+    assert.equal(got.outcome.outcomeId, 'out_1');
   } finally {
     globalThis.fetch = originalFetch;
     await rm(dir, { recursive: true, force: true });

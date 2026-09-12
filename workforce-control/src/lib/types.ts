@@ -139,3 +139,19 @@ export interface ImplementationCase {
   updatedAt: string;
   metadata?: Record<string, unknown>;
 }
+
+/** Durable business outcome from Runtime → Data (read-only in console). */
+export interface OutcomeRecord {
+  outcomeId: string;
+  runId: string;
+  missionId?: string;
+  status: string;
+  outcomeType?: string;
+  externalReference?: string;
+  value?: number;
+  currency?: string;
+  measuredAt?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}

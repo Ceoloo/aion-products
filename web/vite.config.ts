@@ -24,7 +24,7 @@ function browserBoundary(): Plugin {
     },
     transform(_code, id) {
       const path = id.replaceAll('\\', '/').split('?')[0];
-      if (/\/src\/(server|cli)\//.test(path) || /\/src\/platform\/(provider-adapter|ai-execution|runtime-client)\.ts$/.test(path) || /\/src\/platform\/providers\//.test(path) || /\/src\/aion\.ts$/.test(path) || /\/src\/validation\/(store|readiness)\.ts$/.test(path)) {
+      if (/\/src\/(server|cli)\//.test(path) || /\/src\/platform\/(provider-adapter|ai-execution|runtime-client)\.ts$/.test(path) || /\/src\/platform\/providers\//.test(path) || /\/src\/aion\.ts$/.test(path) || /\/src\/validation\/(store|readiness|runtime-session-store)\.ts$/.test(path)) {
         this.error(`Server-only module entered the browser graph: ${path}`);
       }
       return null;
