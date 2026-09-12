@@ -213,10 +213,43 @@ export class RuntimeClient {
   }
 }
 
+/**
+ * Durable deployments (staging/production) must use Runtime HTTP (ADR-007).
+ * Image packaging gates may set AION_ENVIRONMENT=production without a Runtime
+ * only when AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1 is explicit.
+ */
+export function isDurableDeployment(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const name = (env.AION_ENVIRONMENT ?? 'local').trim().toLowerCase();
+  if (name !== 'production' && name !== 'staging' && name !== 'prod') {
+    return false;
+  }
+  if (env.AION_ALLOW_IN_MEMORY_CONTROL_PLANE === '1') return false;
+  return true;
+}
+
 /** Resolve Runtime base URL from env; undefined → in-memory / offline mode. */
 export function runtimeUrlFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   const url = env.AION_RUNTIME_URL?.trim();
   return url && url.length > 0 ? url : undefined;
+}
+
+/**
+ * Resolve Runtime URL with ADR-007 fail-closed semantics: staging/production
+ * require AION_RUNTIME_URL (unless explicitly allowed for packaging gates).
+ */
+export function resolveRuntimeUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const url = runtimeUrlFromEnv(env);
+  if (url) return url;
+  if (isDurableDeployment(env)) {
+    throw new Error(
+      'AION_RUNTIME_URL is required when AION_ENVIRONMENT is production|staging (ADR-007 fail-closed). Set AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1 only for non-durable packaging gates.',
+    );
+  }
+  return undefined;
 }

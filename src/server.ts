@@ -38,7 +38,7 @@ import {
   buildCallOutcomeAttribution,
   publishCallOutcome,
 } from './platform/outcome.ts';
-import { RuntimeClient, runtimeUrlFromEnv } from './platform/runtime-client.ts';
+import { RuntimeClient, resolveRuntimeUrl } from './platform/runtime-client.ts';
 import { createSessionStore } from './validation/runtime-session-store.ts';
 import type { SessionStore } from './validation/store.ts';
 import { assembleSessionRecord } from './validation/record.ts';
@@ -55,7 +55,8 @@ const LOG_LEVEL = (process.env.LOG_LEVEL ?? 'info') as
   | 'warn'
   | 'error';
 const SESSION_TTL_MS = Number(process.env.COPILOT_SESSION_TTL_MS ?? 60 * 60 * 1000);
-const RUNTIME_URL = runtimeUrlFromEnv();
+// ADR-007: staging/production fail-closed unless packaging escape hatch is set.
+const RUNTIME_URL = resolveRuntimeUrl();
 const runtimeClient = RUNTIME_URL ? new RuntimeClient({ baseUrl: RUNTIME_URL }) : null;
 /** Durable session checkpoints when Runtime is configured; else in-memory only. */
 const durableStore: SessionStore | null = RUNTIME_URL

@@ -43,6 +43,7 @@ docker network create "$NET" >/dev/null
 echo "[boot-check] 1/4 start the copilot HTTP service (no DB, no secrets)"
 docker run -d --name "$APP" --network "$NET" \
   -e AION_ENVIRONMENT=production -e LOG_LEVEL=info \
+  -e AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1 \
   -e PORT=8080 -e GIT_SHA="${EXPECTED_SHA:-unknown}" \
   "$IMAGE" >/dev/null
 

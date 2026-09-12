@@ -65,7 +65,13 @@ export type { DealState } from './domain/deal.ts';
 export type { LiveUpdate } from './pipeline/copilot.ts';
 export { buildCallOutcomeAttribution, toCreateOutcomeInput, publishCallOutcome } from './platform/outcome.ts';
 export type { CallOutcomeAttribution } from './platform/outcome.ts';
-export { RuntimeClient, RuntimeApiError, runtimeUrlFromEnv } from './platform/runtime-client.ts';
+export {
+  RuntimeClient,
+  RuntimeApiError,
+  runtimeUrlFromEnv,
+  resolveRuntimeUrl,
+  isDurableDeployment,
+} from './platform/runtime-client.ts';
 export type {
   CreateOutcomeInput,
   OutcomeRecord,

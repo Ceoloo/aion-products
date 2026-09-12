@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AiExecutionService } from '../src/platform/ai-execution.ts';
+import { resolveRuntimeUrl } from '../src/platform/runtime-client.ts';
 import { ScriptedLlm, ThrowingLlm } from '../src/testing/fakes.ts';
 import type { AiTask } from '../src/platform/revenue-ai-tasks.ts';
 import type { FactSlot } from '../src/domain/facts.ts';
@@ -251,4 +252,34 @@ test('outcome attribution links run/execution ids and cost', () => {
   assert.equal(attribution.outcome.advanced, true);
   assert.equal(attribution.outcome.status, 'realized');
   assert.equal(attribution.metadata.product, 'revenue-copilot');
+});
+
+test('ADR-007 fail-closed: production without Runtime URL throws', () => {
+  assert.throws(
+    () =>
+      resolveRuntimeUrl({
+        AION_ENVIRONMENT: 'production',
+      } as NodeJS.ProcessEnv),
+    /AION_RUNTIME_URL is required/,
+  );
+});
+
+test('ADR-007 fail-closed: staging with URL resolves', () => {
+  assert.equal(
+    resolveRuntimeUrl({
+      AION_ENVIRONMENT: 'staging',
+      AION_RUNTIME_URL: 'http://runtime.example',
+    } as NodeJS.ProcessEnv),
+    'http://runtime.example',
+  );
+});
+
+test('ADR-007 packaging hatch allows in-memory under production label', () => {
+  assert.equal(
+    resolveRuntimeUrl({
+      AION_ENVIRONMENT: 'production',
+      AION_ALLOW_IN_MEMORY_CONTROL_PLANE: '1',
+    } as NodeJS.ProcessEnv),
+    undefined,
+  );
 });
