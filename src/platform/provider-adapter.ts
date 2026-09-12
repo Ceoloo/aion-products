@@ -1,11 +1,13 @@
 /** Server-only provider discovery and vendor loading. */
 import type { LlmProvider, LlmRequest, LlmResponse } from './provider-contracts.ts';
 export type { Effort, LlmProvider, LlmRequest, LlmResponse } from './provider-contracts.ts';
+export { safeGenerate, successTelemetry } from './provider-contracts.ts';
 export { RevenueExecutionAdapter } from './revenue-execution-adapter.ts';
 export type { RevenueAdapterDeps } from './revenue-execution-adapter.ts';
 // Value import (not a type): the reverse import in openrouter.ts is `import
 // type` and is erased at runtime, so there is no runtime cycle.
 import { OpenRouterProvider } from './providers/openrouter.ts';
+import { successTelemetry } from './provider-contracts.ts';
 
 /** Anthropic-backed provider (lazy SDK import). */
 export class AnthropicProvider implements LlmProvider {
@@ -26,6 +28,7 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {
+    const started = Date.now();
     const client = await this.getClient();
     const resp = await client.messages.create({
       model: req.model,
@@ -45,6 +48,7 @@ export class AnthropicProvider implements LlmProvider {
       model: resp.model ?? req.model,
       tokensIn: resp.usage?.input_tokens ?? null,
       tokensOut: resp.usage?.output_tokens ?? null,
+      ...successTelemetry(this.name, Date.now() - started, null),
     };
   }
 }
