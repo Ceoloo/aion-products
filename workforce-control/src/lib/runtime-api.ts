@@ -10,6 +10,7 @@ import type {
   ExecutionObject,
   ImplementationCase,
   Mission,
+  OutcomeRecord,
 } from './types';
 
 const RUNTIME_URL = (import.meta.env.VITE_AION_RUNTIME_URL as string | undefined)?.replace(/\/$/, '') ?? '';
@@ -335,6 +336,29 @@ export const RuntimeApi = {
       `/v1/implementations/${encodeURIComponent(caseId)}/activate`,
       tenantId,
       { method: 'POST', body: JSON.stringify(body) },
+    );
+  },
+
+  // ── Business outcomes (Runtime → Data) ─────────────────────────────────
+
+  listOutcomes(
+    tenantId: string,
+    query?: { missionId?: string; runId?: string },
+  ) {
+    const params = new URLSearchParams();
+    if (query?.missionId) params.set('missionId', query.missionId);
+    if (query?.runId) params.set('runId', query.runId);
+    const qs = params.toString();
+    return request<{ outcomes: OutcomeRecord[]; count: number }>(
+      `/v1/outcomes${qs ? `?${qs}` : ''}`,
+      tenantId,
+    );
+  },
+
+  getOutcome(tenantId: string, outcomeId: string) {
+    return request<{ outcome: OutcomeRecord }>(
+      `/v1/outcomes/${encodeURIComponent(outcomeId)}`,
+      tenantId,
     );
   },
 };

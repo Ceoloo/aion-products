@@ -4,9 +4,12 @@
  * Execution Result ≠ Business Outcome. After a call, the product records a
  * business outcome and links it to the durable run/execution ids produced by
  * Runtime (or the in-memory plane in offline mode). Persistence of the outcome
- * record itself is owned by aion-data; this helper shapes the attribution
- * payload products hand off.
+ * record itself is owned by aion-data via Runtime HTTP; this helper shapes the
+ * attribution payload and maps it to CreateOutcomeInput.
  */
+
+import type { CreateOutcomeInput, OutcomeRecord } from './runtime-contracts.ts';
+import type { RuntimeClient } from './runtime-client.ts';
 
 export interface CallOutcomeAttribution {
   callId: string;
@@ -75,4 +78,53 @@ export function buildCallOutcomeAttribution(
       ...(input.metadata ?? {}),
     },
   };
+}
+
+/**
+ * Map product attribution → Runtime/Data CreateOutcomeInput.
+ * Requires at least one runId (first run is the durable link).
+ */
+export function toCreateOutcomeInput(
+  attribution: CallOutcomeAttribution,
+): CreateOutcomeInput | null {
+  const runId = attribution.runIds[0];
+  if (!runId) return null;
+  return {
+    runId,
+    status: attribution.outcome.status,
+    outcomeType: attribution.outcome.type,
+    ...(attribution.outcome.value !== undefined ? { value: attribution.outcome.value } : {}),
+    ...(attribution.outcome.currency ? { currency: attribution.outcome.currency } : {}),
+    measuredAt: attribution.measuredAt,
+    metadata: {
+      ...attribution.metadata,
+      callId: attribution.callId,
+      runIds: attribution.runIds,
+      executionIds: attribution.executionIds,
+      totalCostUnits: attribution.totalCostUnits,
+      ...(attribution.totalTokens !== undefined ? { totalTokens: attribution.totalTokens } : {}),
+      advanced: attribution.outcome.advanced,
+      ...(attribution.outcome.stageBeforeId
+        ? { stageBeforeId: attribution.outcome.stageBeforeId }
+        : {}),
+      ...(attribution.outcome.stageAfterId
+        ? { stageAfterId: attribution.outcome.stageAfterId }
+        : {}),
+      ...(attribution.outcome.summary ? { summary: attribution.outcome.summary } : {}),
+    },
+  };
+}
+
+/**
+ * When Runtime is configured and the call produced run ids, POST a durable
+ * outcome. No-ops (returns null) when offline or when there are no run ids.
+ */
+export async function publishCallOutcome(
+  client: RuntimeClient,
+  attribution: CallOutcomeAttribution,
+): Promise<OutcomeRecord | null> {
+  const input = toCreateOutcomeInput(attribution);
+  if (!input) return null;
+  const { outcome } = await client.createOutcome(input);
+  return outcome;
 }

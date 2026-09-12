@@ -5,7 +5,7 @@ import { MetricLink } from '@/components/MetricLink';
 import { useTenant } from '@/hooks/useTenant';
 import { missionCohortLabel, isCompletedWithException } from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
-import type { EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
+import type { EconomicsRollup, ExecutionObject, Mission, OutcomeRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -20,6 +20,7 @@ export default function MissionDetail() {
   const [mission, setMission] = useState<Mission | null>(null);
   const [economics, setEconomics] = useState<EconomicsRollup | null>(null);
   const [executions, setExecutions] = useState<ExecutionObject[]>([]);
+  const [outcomes, setOutcomes] = useState<OutcomeRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
@@ -35,20 +36,26 @@ export default function MissionDetail() {
       RuntimeApi.getMission(tenantId, missionId),
       RuntimeApi.getMissionEconomics(tenantId, missionId),
       RuntimeApi.listExecutions(tenantId, 200),
+      RuntimeApi.listOutcomes(tenantId, { missionId }).catch(() => ({
+        outcomes: [] as OutcomeRecord[],
+        count: 0,
+      })),
     ])
-      .then(([m, e, list]) => {
+      .then(([m, e, list, out]) => {
         if (cancelled) return;
         setMission(m.mission ?? null);
         setEconomics(e.economics ?? null);
         setExecutions(
           (list.executions ?? []).filter((x) => x.missionId === missionId),
         );
+        setOutcomes(out.outcomes ?? []);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setMission(null);
         setEconomics(null);
         setExecutions([]);
+        setOutcomes([]);
         setError(err instanceof Error ? err.message : 'Failed to load mission');
       })
       .finally(() => {
@@ -307,6 +314,41 @@ export default function MissionDetail() {
           </dl>
         </section>
       )}
+
+      <section className="mb-10 animate-fade-up" style={{ animationDelay: '60ms' }}>
+        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+          Business outcomes
+        </h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Durable outcomes from Runtime/Data for this mission — empty when none recorded.
+        </p>
+        {outcomes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No durable outcomes for this mission.</p>
+        ) : (
+          <ul className="divide-y divide-border/70 border border-border/70 rounded-md">
+            {outcomes.map((o) => (
+              <li key={o.outcomeId} className="px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs">{o.outcomeId}</span>
+                  <Badge variant="secondary">{o.status}</Badge>
+                  {o.outcomeType && <Badge variant="outline">{o.outcomeType}</Badge>}
+                </div>
+                <div className="mt-1 font-mono text-[0.65rem] text-muted-foreground">
+                  run {o.runId}
+                  {o.value != null && (
+                    <span>
+                      {' · '}
+                      {o.value}
+                      {o.currency ? ` ${o.currency}` : ''}
+                    </span>
+                  )}
+                  {o.measuredAt && <span> · {o.measuredAt}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="mb-10 animate-fade-up" style={{ animationDelay: '80ms' }}>
         <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">

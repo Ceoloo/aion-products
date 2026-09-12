@@ -25,11 +25,17 @@ import type { GroundTruth, ConfirmedOutcome } from '../domain/session.ts';
 import { suggestEvaluable, suggestKind } from '../domain/session.ts';
 import { parseTranscript } from '../validation/transcript.ts';
 import { classifyLiveUtterance } from '../validation/speaker-roles.ts';
-import { JsonSessionStore, type SessionStore } from '../validation/store.ts';
+import { type SessionStore } from '../validation/store.ts';
+import { createSessionStore } from '../validation/runtime-session-store.ts';
 import { assembleSessionRecord, applyGroundTruthToRecord } from '../validation/record.ts';
 import { buildDashboard, scoreRecord } from '../validation/scoring.ts';
 import { gatherReadiness } from '../validation/readiness.ts';
 import type { SessionRecord } from '../domain/session.ts';
+import {
+  buildCallOutcomeAttribution,
+  publishCallOutcome,
+} from '../platform/outcome.ts';
+import { RuntimeClient, runtimeUrlFromEnv } from '../platform/runtime-client.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4173);
@@ -39,7 +45,10 @@ const PORT = Number(process.env.PORT ?? 4173);
 const HOST = process.env.AION_HOST ?? '127.0.0.1';
 const TOKEN = (process.env.AION_TOKEN ?? '').trim();
 const DATA_DIR = process.env.AION_DATA_DIR ?? join(process.cwd(), 'data');
-let store: SessionStore = new JsonSessionStore(DATA_DIR);
+/** Runtime-backed when AION_RUNTIME_URL is set; else Json under DATA_DIR. */
+let store: SessionStore = createSessionStore({ dataDir: DATA_DIR });
+const RUNTIME_URL = runtimeUrlFromEnv();
+const runtimeClient = RUNTIME_URL ? new RuntimeClient({ baseUrl: RUNTIME_URL }) : null;
 
 // Whitelists for validating operator-supplied ground truth (defence in depth;
 // combined with escaping on render, this blocks stored XSS / garbage records).
@@ -163,6 +172,42 @@ function summarizeRecord(r: SessionRecord) {
     advanced: r.after.groundTruth?.advanced ?? r.after.aiOutcome.advanced,
     aiStage: `${r.after.aiOutcome.stageBeforeId}→${r.after.aiOutcome.stageAfterId}`,
   };
+}
+
+/**
+ * After finalize: when Runtime is configured and the call produced durable
+ * run ids, POST a business outcome. Failures are logged but do not roll back
+ * the persisted session record.
+ */
+async function maybePublishOutcome(
+  exec: AiExecutionService,
+  record: SessionRecord,
+): Promise<{ outcomeId?: string; skipped?: string } | null> {
+  if (!runtimeClient) return { skipped: 'runtime_unset' };
+  const ids = exec.attributionIds();
+  if (ids.runIds.length === 0) return { skipped: 'no_run_ids' };
+  const advanced =
+    record.after.groundTruth?.advanced ?? record.after.aiOutcome.advanced;
+  const attribution = buildCallOutcomeAttribution({
+    callId: record.sessionId,
+    runIds: ids.runIds,
+    executionIds: ids.executionIds,
+    totalCostUnits: ids.totalCostUnits,
+    ...(ids.totalTokens !== undefined ? { totalTokens: ids.totalTokens } : {}),
+    advanced,
+    stageBeforeId: record.after.aiOutcome.stageBeforeId,
+    stageAfterId: record.after.aiOutcome.stageAfterId,
+    summary: record.after.groundTruth?.revenueOutcome,
+  });
+  try {
+    const outcome = await publishCallOutcome(runtimeClient, attribution);
+    return outcome ? { outcomeId: outcome.outcomeId } : { skipped: 'no_run_ids' };
+  } catch (e) {
+    console.warn(
+      `outcome publish failed for ${record.sessionId}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return { skipped: 'publish_failed' };
+  }
 }
 
 // Built SPA lives at <repo>/web/dist; HERE is <repo>/src/server.
@@ -376,8 +421,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         json(res, 500, { error: `failed to persist record: ${e instanceof Error ? e.message : String(e)}` });
         return;
       }
+      const published = await maybePublishOutcome(s.exec, record);
       live.delete(s.sessionId);
-      json(res, 200, { saved: true, sessionId: record.sessionId, kind: record.kind, evaluable: record.evaluable, score: scoreRecord(record), outcome: record.after.aiOutcome });
+      json(res, 200, {
+        saved: true,
+        sessionId: record.sessionId,
+        kind: record.kind,
+        evaluable: record.evaluable,
+        score: scoreRecord(record),
+        outcome: record.after.aiOutcome,
+        ...(published ? { businessOutcome: published } : {}),
+      });
       return;
     }
   }

@@ -13,9 +13,30 @@ export interface RuntimeClientOptions {
   fetch?: typeof fetch;
 }
 
-import { RuntimeApiError, type SubmitCommandRequest, type RuntimeCommandResponse, type RuntimeApiErrorBody } from './runtime-contracts.ts';
+import {
+  RuntimeApiError,
+  type SubmitCommandRequest,
+  type RuntimeCommandResponse,
+  type RuntimeApiErrorBody,
+  type CreateOutcomeInput,
+  type UpdateOutcomeInput,
+  type OutcomeRecord,
+  type CreateRevenueSessionInput,
+  type UpdateRevenueSessionInput,
+  type RevenueSessionRecord,
+} from './runtime-contracts.ts';
 export { RuntimeApiError } from './runtime-contracts.ts';
-export type { SubmitCommandRequest, RuntimeCommandResponse, RuntimeApiErrorBody } from './runtime-contracts.ts';
+export type {
+  SubmitCommandRequest,
+  RuntimeCommandResponse,
+  RuntimeApiErrorBody,
+  CreateOutcomeInput,
+  UpdateOutcomeInput,
+  OutcomeRecord,
+  CreateRevenueSessionInput,
+  UpdateRevenueSessionInput,
+  RevenueSessionRecord,
+} from './runtime-contracts.ts';
 
 export class RuntimeClient {
   private readonly baseUrl: string;
@@ -55,6 +76,114 @@ export class RuntimeClient {
 
   async listServices(): Promise<unknown> {
     return this.request('GET', '/v1/services');
+  }
+
+  // ── Outcomes (Runtime → Data) ──────────────────────────────────────────
+
+  async createOutcome(input: CreateOutcomeInput): Promise<{ outcome: OutcomeRecord }> {
+    return this.request('POST', '/v1/outcomes', input) as Promise<{ outcome: OutcomeRecord }>;
+  }
+
+  async getOutcome(outcomeId: string): Promise<{ outcome: OutcomeRecord }> {
+    return this.request(
+      'GET',
+      `/v1/outcomes/${encodeURIComponent(outcomeId)}`,
+    ) as Promise<{ outcome: OutcomeRecord }>;
+  }
+
+  async listOutcomes(query?: {
+    missionId?: string;
+    runId?: string;
+  }): Promise<{ outcomes: OutcomeRecord[]; count: number }> {
+    const params = new URLSearchParams();
+    if (query?.missionId) params.set('missionId', query.missionId);
+    if (query?.runId) params.set('runId', query.runId);
+    const qs = params.toString();
+    const raw = (await this.request(
+      'GET',
+      `/v1/outcomes${qs ? `?${qs}` : ''}`,
+    )) as { outcomes?: OutcomeRecord[]; count?: number };
+    const outcomes = Array.isArray(raw.outcomes) ? raw.outcomes : [];
+    return { outcomes, count: raw.count ?? outcomes.length };
+  }
+
+  async patchOutcome(
+    outcomeId: string,
+    patch: UpdateOutcomeInput,
+  ): Promise<{ outcome: OutcomeRecord }> {
+    return this.request(
+      'PATCH',
+      `/v1/outcomes/${encodeURIComponent(outcomeId)}`,
+      patch,
+    ) as Promise<{ outcome: OutcomeRecord }>;
+  }
+
+  // ── Revenue sessions (Runtime → Data) ──────────────────────────────────
+
+  async createRevenueSession(
+    input: CreateRevenueSessionInput,
+  ): Promise<{ session: RevenueSessionRecord }> {
+    return this.request('POST', '/v1/revenue-sessions', input) as Promise<{
+      session: RevenueSessionRecord;
+    }>;
+  }
+
+  async getRevenueSession(
+    sessionId: string,
+  ): Promise<{ session: RevenueSessionRecord }> {
+    return this.request(
+      'GET',
+      `/v1/revenue-sessions/${encodeURIComponent(sessionId)}`,
+    ) as Promise<{ session: RevenueSessionRecord }>;
+  }
+
+  async updateRevenueSession(
+    sessionId: string,
+    body: UpdateRevenueSessionInput,
+  ): Promise<{ session: RevenueSessionRecord }> {
+    return this.request(
+      'PUT',
+      `/v1/revenue-sessions/${encodeURIComponent(sessionId)}`,
+      body,
+    ) as Promise<{ session: RevenueSessionRecord }>;
+  }
+
+  async listRevenueSessions(status?: 'active' | 'finalized'): Promise<{
+    sessions: RevenueSessionRecord[];
+    count: number;
+  }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    const raw = (await this.request('GET', `/v1/revenue-sessions${qs}`)) as {
+      sessions?: RevenueSessionRecord[];
+      sessionIds?: string[];
+      records?: unknown[];
+      count?: number;
+    };
+    // Normalize gateway variants (full rows, ids-only active list, finals-only).
+    let sessions: RevenueSessionRecord[] = [];
+    if (Array.isArray(raw.sessions)) {
+      sessions = raw.sessions;
+    } else if (status === 'finalized' && Array.isArray(raw.records)) {
+      sessions = raw.records.map((finalRecord, i) => ({
+        sessionId:
+          finalRecord &&
+          typeof finalRecord === 'object' &&
+          typeof (finalRecord as { sessionId?: unknown }).sessionId === 'string'
+            ? (finalRecord as { sessionId: string }).sessionId
+            : `finalized_${i}`,
+        checkpoint: null,
+        finalRecord,
+        revision: 0,
+      }));
+    } else if (status === 'active' && Array.isArray(raw.sessionIds)) {
+      sessions = raw.sessionIds.map((sessionId) => ({
+        sessionId,
+        checkpoint: null,
+        finalRecord: null,
+        revision: 0,
+      }));
+    }
+    return { sessions, count: raw.count ?? sessions.length };
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {

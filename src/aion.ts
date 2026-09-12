@@ -63,6 +63,17 @@ export { getSchema, listSchemas } from './config/registry.ts';
 export type { CallIntelligence, TraceSummary } from './domain/report.ts';
 export type { DealState } from './domain/deal.ts';
 export type { LiveUpdate } from './pipeline/copilot.ts';
-export { buildCallOutcomeAttribution } from './platform/outcome.ts';
+export { buildCallOutcomeAttribution, toCreateOutcomeInput, publishCallOutcome } from './platform/outcome.ts';
 export type { CallOutcomeAttribution } from './platform/outcome.ts';
 export { RuntimeClient, RuntimeApiError, runtimeUrlFromEnv } from './platform/runtime-client.ts';
+export type {
+  CreateOutcomeInput,
+  OutcomeRecord,
+  RevenueSessionRecord,
+} from './platform/runtime-contracts.ts';
+export {
+  RuntimeRevenueSessionStore,
+  createSessionStore,
+} from './validation/runtime-session-store.ts';
+export type { SessionStore } from './validation/store.ts';
+export { InMemorySessionStore, JsonSessionStore } from './validation/store.ts';

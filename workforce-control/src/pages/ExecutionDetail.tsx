@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
-import type { ExecutionObject } from '@/lib/types';
+import type { ExecutionObject, OutcomeRecord } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 
 /**
@@ -14,6 +14,7 @@ export default function ExecutionDetail() {
   const { tenantId } = useTenant();
   const [execution, setExecution] = useState<ExecutionObject | null>(null);
   const [tree, setTree] = useState<ExecutionObject[]>([]);
+  const [outcomes, setOutcomes] = useState<OutcomeRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -38,11 +39,22 @@ export default function ExecutionDetail() {
             if (!cancelled) setTree([]);
           }
         }
+        if (exe?.runId) {
+          try {
+            const out = await RuntimeApi.listOutcomes(tenantId, { runId: exe.runId });
+            if (!cancelled) setOutcomes(out.outcomes ?? []);
+          } catch {
+            if (!cancelled) setOutcomes([]);
+          }
+        } else if (!cancelled) {
+          setOutcomes([]);
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setExecution(null);
         setTree([]);
+        setOutcomes([]);
         setError(err instanceof Error ? err.message : 'Failed to load execution');
       })
       .finally(() => {
@@ -167,6 +179,22 @@ export default function ExecutionDetail() {
             <h1 className="mt-1 font-display text-2xl md:text-3xl font-semibold tracking-tight font-mono break-all">
               {execution.executionId}
             </h1>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(execution.outcomeSummary ||
+                execution.revenueAttributed != null ||
+                execution.outcomeId) && (
+                <Badge variant="ok">
+                  {execution.outcomeId
+                    ? `outcome ${execution.outcomeId}`
+                    : execution.outcomeSummary
+                      ? String(execution.outcomeSummary)
+                      : `revenue ${execution.revenueAttributed}`}
+                </Badge>
+              )}
+              {outcomes.length > 0 && (
+                <Badge variant="outline">{outcomes.length} durable outcome(s)</Badge>
+              )}
+            </div>
           </header>
 
           <section className="mb-10 animate-fade-up" style={{ animationDelay: '80ms' }}>
@@ -180,6 +208,39 @@ export default function ExecutionDetail() {
                 </div>
               ))}
             </dl>
+          </section>
+
+          <section className="mb-10 animate-fade-up" style={{ animationDelay: '110ms' }}>
+            <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+              Business outcomes
+            </h2>
+            {outcomes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No durable outcomes linked to this execution&apos;s run.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border/70 border border-border/70 rounded-md">
+                {outcomes.map((o) => (
+                  <li key={o.outcomeId} className="px-3 py-2 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs">{o.outcomeId}</span>
+                      <Badge variant="secondary">{o.status}</Badge>
+                      {o.outcomeType && <Badge variant="outline">{o.outcomeType}</Badge>}
+                    </div>
+                    <div className="mt-1 font-mono text-[0.65rem] text-muted-foreground">
+                      {o.measuredAt ?? o.createdAt ?? '—'}
+                      {o.value != null && (
+                        <span>
+                          {' · '}
+                          {o.value}
+                          {o.currency ? ` ${o.currency}` : ''}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="animate-fade-up" style={{ animationDelay: '140ms' }}>
