@@ -10,13 +10,18 @@ const DECIDED_BY =
   (import.meta.env.VITE_AION_OPERATOR_ID as string | undefined) ?? 'operator-console';
 
 /** Human actor stamped on every Console approval decision (satisfies actors FK). */
-function consoleApproverActor(tenantId: string) {
+function consoleApproverActor(
+  tenantId: string,
+  opts?: { productionEconomic?: boolean },
+) {
+  const productionEconomic = opts?.productionEconomic === true;
   return {
     actorType: 'human' as const,
     actorId: DECIDED_BY,
     name: 'Operator Console Approver',
     email: 'operator-console@aion.local',
     permissions: [
+      'crm.opportunity.create',
       'crm.opportunity.update',
       'crm.contact.update',
       'crm.note.create',
@@ -28,8 +33,8 @@ function consoleApproverActor(tenantId: string) {
     companyId: 'co_aion',
     metadata: {
       source: 'operator-console',
-      cohort: 'pre_ol_validation',
-      productionEconomic: false,
+      cohort: productionEconomic ? 'OL-001' : 'pre_ol_validation',
+      productionEconomic,
     },
   };
 }
@@ -60,17 +65,27 @@ export function ApprovalPanel({
 
   if (!open) return null;
 
-  async function decide(approvalId: string, approve: boolean) {
-    setBusyId(approvalId);
+  async function decide(approval: ApprovalRequest, approve: boolean) {
+    setBusyId(approval.approvalId);
     setActionError(null);
+    const cmdMeta =
+      approval.command &&
+      typeof approval.command === 'object' &&
+      approval.command !== null &&
+      'metadata' in approval.command &&
+      typeof (approval.command as { metadata?: unknown }).metadata === 'object'
+        ? ((approval.command as { metadata?: Record<string, unknown> }).metadata ??
+          {})
+        : {};
+    const productionEconomic = cmdMeta.productionEconomic === true;
     try {
-      await RuntimeApi.decideApproval(tenantId, approvalId, {
+      await RuntimeApi.decideApproval(tenantId, approval.approvalId, {
         approve,
         decidedBy: DECIDED_BY,
         note: approve
           ? 'approved via Operator Console'
           : 'denied via Operator Console',
-        actor: consoleApproverActor(tenantId),
+        actor: consoleApproverActor(tenantId, { productionEconomic }),
       });
       onDecided?.();
     } catch (err: unknown) {
@@ -166,7 +181,7 @@ export function ApprovalPanel({
                   type="button"
                   size="sm"
                   disabled={busyId === a.approvalId}
-                  onClick={() => void decide(a.approvalId, true)}
+                  onClick={() => void decide(a, true)}
                 >
                   {busyId === a.approvalId ? '…' : 'Approve'}
                 </Button>
@@ -175,7 +190,7 @@ export function ApprovalPanel({
                   size="sm"
                   variant="outline"
                   disabled={busyId === a.approvalId}
-                  onClick={() => void decide(a.approvalId, false)}
+                  onClick={() => void decide(a, false)}
                 >
                   Deny
                 </Button>

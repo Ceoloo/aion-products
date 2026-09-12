@@ -106,7 +106,8 @@ export const LEAD_TO_APPOINTMENT_V1: WorkflowTemplate = {
       name: 'opportunity',
       capability: 'crm.opportunity.create',
       riskLevel: 'R2',
-      description: 'Create pipeline opportunity (approval-gated)',
+      description:
+        'Create pipeline opportunity, or update when opportunityId is already known (approval-gated)',
     },
     {
       name: 'follow-up-task',
