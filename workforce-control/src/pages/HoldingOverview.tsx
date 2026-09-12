@@ -7,6 +7,13 @@ import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { ApprovalRequest, EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import {
+  AttentionRail,
+  EmptyState,
+  ErrorState,
+  LoadState,
+  type AttentionItem,
+} from '@/components/WorkflowState';
 
 const PORTFOLIO = [
   { key: 'systems', label: 'Systems', domain: 'revenue' },
@@ -79,6 +86,49 @@ export default function HoldingOverview() {
     };
   }, [missions, approvals, executions]);
 
+  const attentionItems = useMemo((): AttentionItem[] => {
+    const items: AttentionItem[] = [];
+    for (const a of approvals) {
+      items.push({
+        id: `approval-${a.approvalId}`,
+        kind: 'approval',
+        label: (a.reason && a.reason.trim()) || a.approvalId,
+        detail: [a.riskLevel ? `risk ${a.riskLevel}` : null, a.missionId]
+          .filter(Boolean)
+          .join(' · ') || undefined,
+        to: a.missionId
+          ? `/missions/${a.missionId}`
+          : a.executionId
+            ? `/executions/${a.executionId}`
+            : undefined,
+        onAct: () => setPanelOpen(true),
+        actLabel: 'Decide',
+      });
+    }
+    for (const m of missions.filter((x) => x.status === 'failed' || x.status === 'denied')) {
+      items.push({
+        id: `mission-fail-${m.missionId}`,
+        kind: 'failure',
+        label: m.name,
+        detail: m.missionId,
+        to: `/missions/${m.missionId}`,
+      });
+    }
+    for (const e of executions.filter((x) => x.status === 'failed' || x.status === 'denied').slice(0, 8)) {
+      items.push({
+        id: `exe-fail-${e.executionId}`,
+        kind: 'failure',
+        label: e.executionId,
+        detail: [e.status, e.missionId].filter(Boolean).join(' · '),
+        to: `/executions/${e.executionId}`,
+      });
+    }
+    return [
+      ...items.filter((i) => i.kind === 'approval'),
+      ...items.filter((i) => i.kind !== 'approval'),
+    ].slice(0, 12);
+  }, [approvals, missions, executions]);
+
   const domainsPresent = useMemo(() => {
     const set = new Set(executions.map((e) => e.domain).filter(Boolean) as string[]);
     return set;
@@ -139,13 +189,13 @@ export default function HoldingOverview() {
           </Link>
           .
         </p>
-        {loading && (
-          <p className="mt-4 text-sm text-muted-foreground animate-pulse-soft">
-            Loading canonical truth…
-          </p>
+        {loading && <LoadState label="Loading canonical truth…" />}
+        {error && (
+          <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
         )}
-        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
       </section>
+
+      <AttentionRail items={attentionItems} loading={loading && !error} />
 
       <section className="mb-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
         <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
@@ -182,7 +232,7 @@ export default function HoldingOverview() {
                   <p className="mt-2 text-xs text-muted-foreground">Stub — no data domain yet</p>
                 ) : live ? (
                   <Link
-                    to="/?filter=executions"
+                    to="/missions"
                     className="mt-2 block font-mono text-lg text-foreground hover:text-primary"
                   >
                     {count}
@@ -324,9 +374,12 @@ export default function HoldingOverview() {
           </Link>
         </div>
         {missions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No missions referenced by executions for this tenant.
-          </p>
+          <EmptyState
+            title="No missions for this tenant"
+            detail="Runtime returned an empty mission list — launch work or switch tenant."
+            actionTo="/missions/new"
+            actionLabel="Launch mission"
+          />
         ) : (
           <ul className="divide-y divide-border/70 border border-border/70 rounded-md overflow-hidden">
             {missions.slice(0, 12).map((m) => (

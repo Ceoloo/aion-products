@@ -269,9 +269,29 @@ function ReadinessStrip() {
   const [err, setErr] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    AionApi.health().then(setR).catch(() => setErr(true));
+    AionApi.health().then(setR).catch(() => setErr(true)); // empty health → blocked launch, not fake ready
   }, []);
-  if (err || !r) return null;
+  if (err) {
+    return (
+      <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive" role="alert">
+        <div className="flex items-center gap-2 font-medium">
+          <TriangleAlert className="h-4 w-4" />
+          Readiness check failed
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-destructive/90">
+          Could not reach the Revenue Copilot API health endpoint. Confirm the product
+          server is running and refresh — do not treat this room as ready.
+        </p>
+      </div>
+    );
+  }
+  if (!r) {
+    return (
+      <div className="rounded-xl border border-border/70 bg-card/40 px-3 py-2.5 text-sm text-muted-foreground" role="status">
+        Checking systems…
+      </div>
+    );
+  }
 
   const blockers = r.checks.filter((c) => c.level === 'blocker');
   const warns = r.checks.filter((c) => c.level === 'warn');
