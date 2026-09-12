@@ -4,6 +4,7 @@ import { Shell } from '@/components/Shell';
 import { ApprovalPanel } from '@/components/ApprovalPanel';
 import { useTenant } from '@/hooks/useTenant';
 import {
+  isCompletedWithException,
   isOl001ProductionMission,
   isPreOlValidationMission,
 } from '@/lib/cohort';
@@ -78,10 +79,14 @@ export default function Ol001Scoreboard() {
 
   const production = useMemo(() => {
     const by = (s: string) => cohortMissions.filter((m) => m.status === s).length;
+    const withException = cohortMissions.filter(isCompletedWithException).length;
+    const completed = cohortMissions.filter((m) => m.status === 'completed');
+    const successfulClean = completed.filter((m) => !isCompletedWithException(m)).length;
     return {
       real: cohortMissions.length,
-      successful: by('completed'),
-      failed: by('failed'),
+      successful: successfulClean,
+      completedWithException: withException,
+      failed: by('failed') + by('cancelled'),
       inProgress: by('active') + by('running') + by('paused'),
     };
   }, [cohortMissions]);
@@ -187,6 +192,11 @@ export default function Ol001Scoreboard() {
             emphasize
           />
           <Row label="Successful" value={fmt(production.successful)} />
+          <Row
+            label="Completed with exception"
+            value={fmt(production.completedWithException)}
+            hint="waiver recorded on mission.terminalOutcome — not silent success"
+          />
           <Row label="Failed" value={fmt(production.failed)} />
           <Row label="In progress" value={fmt(production.inProgress)} />
         </Section>

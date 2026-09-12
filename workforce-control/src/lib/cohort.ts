@@ -20,6 +20,20 @@ export function isOl001ProductionMission(m: {
   return meta.productionEconomic === true;
 }
 
+/** Visible partial-success close (waiver recorded on mission, not silent). */
+export function isCompletedWithException(m: {
+  status?: string;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  const meta = m.metadata ?? {};
+  if (meta.outcomeStatus === 'completed_with_exception') return true;
+  const terminal = meta.terminalOutcome;
+  if (terminal && typeof terminal === 'object' && !Array.isArray(terminal)) {
+    return (terminal as Record<string, unknown>).status === 'completed_with_exception';
+  }
+  return false;
+}
+
 export function isPreOlValidationMission(m: {
   name?: string;
   metadata?: Record<string, unknown> | null;

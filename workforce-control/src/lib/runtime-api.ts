@@ -85,6 +85,28 @@ export const RuntimeApi = {
     );
   },
 
+  /**
+   * Close / update a mission (status + metadata merge).
+   * Used for OL-001 terminal outcomes so waivers stay visible on the mission record.
+   */
+  patchMission(
+    tenantId: string,
+    missionId: string,
+    body: {
+      status?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    return request<{ mission: Mission }>(
+      `/v1/missions/${encodeURIComponent(missionId)}`,
+      tenantId,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
   getMissionEconomics(tenantId: string, missionId: string) {
     return request<{ economics: EconomicsRollup }>(
       `/v1/missions/${encodeURIComponent(missionId)}/economics`,

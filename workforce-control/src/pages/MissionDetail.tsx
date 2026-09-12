@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { MetricLink } from '@/components/MetricLink';
 import { useTenant } from '@/hooks/useTenant';
-import { missionCohortLabel } from '@/lib/cohort';
+import { missionCohortLabel, isCompletedWithException } from '@/lib/cohort';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
@@ -78,6 +78,17 @@ export default function MissionDetail() {
     return [...roots.entries()];
   }, [executions]);
 
+  const terminalOutcome = useMemo(() => {
+    const raw = mission?.metadata?.terminalOutcome;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    return raw as Record<string, unknown>;
+  }, [mission]);
+
+  const displayStatus = mission
+    ? isCompletedWithException(mission)
+      ? 'completed_with_exception'
+      : mission.status
+    : null;
   return (
     <Shell>
       <div className="mb-6 text-sm">
@@ -96,7 +107,7 @@ export default function MissionDetail() {
             {mission.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{mission.status}</Badge>
+            <Badge variant="secondary">{displayStatus ?? mission.status}</Badge>
             {mission.riskLevel && <Badge variant="outline">{mission.riskLevel}</Badge>}
             {missionCohortLabel(mission) === 'PRE-OL' && (
               <Badge variant="outline">PRE-OL</Badge>
@@ -132,6 +143,57 @@ export default function MissionDetail() {
             </dl>
           )}
         </header>
+      )}
+
+      {terminalOutcome && (
+        <section className="mb-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
+          <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
+            Terminal outcome
+          </h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Recorded on the mission — waivers are visible here, not silent.
+          </p>
+          <dl className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm border border-border/70 rounded-md p-3">
+            <div>
+              <dt className="text-muted-foreground text-xs">status</dt>
+              <dd className="font-mono">{String(terminalOutcome.status ?? '—')}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">approvals</dt>
+              <dd className="font-mono">{String(terminalOutcome.approvals ?? '—')}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">executions</dt>
+              <dd className="font-mono">{String(terminalOutcome.executions ?? '—')}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">executionCostUnits</dt>
+              <dd className="font-mono">{String(terminalOutcome.executionCostUnits ?? '—')}</dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-muted-foreground text-xs">steps</dt>
+              <dd className="font-mono text-xs whitespace-pre-wrap mt-1">
+                {typeof terminalOutcome.steps === 'object' && terminalOutcome.steps
+                  ? JSON.stringify(terminalOutcome.steps, null, 2)
+                  : String(terminalOutcome.steps ?? '—')}
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-muted-foreground text-xs">workflowDefect</dt>
+              <dd className="font-mono text-xs mt-1">
+                found={String((terminalOutcome as { workflowDefectFound?: unknown }).workflowDefectFound ?? '—')}
+                {' · '}
+                fixed={String((terminalOutcome as { workflowDefectFixed?: unknown }).workflowDefectFixed ?? '—')}
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-muted-foreground text-xs">externalIntegrationDefect</dt>
+              <dd className="font-mono text-xs mt-1">
+                {String(terminalOutcome.externalIntegrationDefect ?? '—')}
+              </dd>
+            </div>
+          </dl>
+        </section>
       )}
 
       <section className="mb-10 animate-fade-up" style={{ animationDelay: '80ms' }}>
