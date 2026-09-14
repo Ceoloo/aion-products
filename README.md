@@ -64,6 +64,17 @@ Set `AION_RUNTIME_URL` to submit governed AI work through durable AION Runtime
 (`POST /v1/commands` + `serviceKey`). Leave it unset for the offline in-memory
 `@aion/core` path used by tests and local demos.
 
+In **staging/production** (ADR-007 / ADR-005 fail-closed):
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `AION_RUNTIME_URL` | yes | Runtime gateway base URL |
+| `AION_RUNTIME_API_KEY` | yes when URL is set | Bearer token (`Authorization: Bearer …`) |
+| `AION_TENANT_ID` | yes when API key is set | Sent as `x-aion-tenant-id` (no silent default) |
+
+Local/tests may omit the API key and tenant. Image packaging gates may set
+`AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1` to boot without Runtime.
+
 ## Run it
 
 No build step, no API key required. Every AI step is governed by the canonical

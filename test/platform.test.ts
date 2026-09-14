@@ -8,6 +8,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AiExecutionService } from '../src/platform/ai-execution.ts';
+import {
+  RuntimeClient,
+  resolveRuntimeAuth,
+  resolveRuntimeUrl,
+} from '../src/platform/runtime-client.ts';
 import { ScriptedLlm, ThrowingLlm } from '../src/testing/fakes.ts';
 import type { AiTask } from '../src/platform/revenue-ai-tasks.ts';
 import type { FactSlot } from '../src/domain/facts.ts';
@@ -251,4 +256,89 @@ test('outcome attribution links run/execution ids and cost', () => {
   assert.equal(attribution.outcome.advanced, true);
   assert.equal(attribution.outcome.status, 'realized');
   assert.equal(attribution.metadata.product, 'revenue-copilot');
+});
+
+test('ADR-007 fail-closed: production without Runtime URL throws', () => {
+  assert.throws(
+    () =>
+      resolveRuntimeUrl({
+        AION_ENVIRONMENT: 'production',
+      } as NodeJS.ProcessEnv),
+    /AION_RUNTIME_URL is required/,
+  );
+});
+
+test('ADR-007 fail-closed: staging with URL resolves', () => {
+  assert.equal(
+    resolveRuntimeUrl({
+      AION_ENVIRONMENT: 'staging',
+      AION_RUNTIME_URL: 'http://runtime.example',
+    } as NodeJS.ProcessEnv),
+    'http://runtime.example',
+  );
+});
+
+test('ADR-007 packaging hatch allows in-memory under production label', () => {
+  assert.equal(
+    resolveRuntimeUrl({
+      AION_ENVIRONMENT: 'production',
+      AION_ALLOW_IN_MEMORY_CONTROL_PLANE: '1',
+    } as NodeJS.ProcessEnv),
+    undefined,
+  );
+});
+
+test('ADR-005 fail-closed: production with Runtime URL requires API key', () => {
+  assert.throws(
+    () =>
+      resolveRuntimeAuth({
+        AION_ENVIRONMENT: 'production',
+        AION_RUNTIME_URL: 'http://runtime.example',
+      } as NodeJS.ProcessEnv),
+    /AION_RUNTIME_API_KEY is required/,
+  );
+});
+
+test('ADR-005 fail-closed: production with API key requires tenant', () => {
+  assert.throws(
+    () =>
+      resolveRuntimeAuth({
+        AION_ENVIRONMENT: 'production',
+        AION_RUNTIME_URL: 'http://runtime.example',
+        AION_RUNTIME_API_KEY: 'secret-key',
+      } as NodeJS.ProcessEnv),
+    /AION_TENANT_ID is required/,
+  );
+});
+
+test('RuntimeClient sends Authorization and x-aion-tenant-id when configured', async () => {
+  const seen: { authorization?: string; tenant?: string } = {};
+  const client = new RuntimeClient({
+    baseUrl: 'http://runtime.test',
+    apiKey: 'test-api-key',
+    tenantId: 'tenant-a',
+    fetch: async (_url, init) => {
+      const headers = init?.headers as Record<string, string>;
+      seen.authorization = headers['authorization'];
+      seen.tenant = headers['x-aion-tenant-id'];
+      return new Response(JSON.stringify({ services: [] }), { status: 200 });
+    },
+  });
+  await client.listServices();
+  assert.equal(seen.authorization, 'Bearer test-api-key');
+  assert.equal(seen.tenant, 'tenant-a');
+});
+
+test('local RuntimeClient may omit auth headers', async () => {
+  let headerKeys: string[] = [];
+  const client = new RuntimeClient({
+    baseUrl: 'http://runtime.test',
+    fetch: async (_url, init) => {
+      headerKeys = init?.headers ? Object.keys(init.headers as Record<string, string>) : [];
+      return new Response(JSON.stringify({ services: [] }), { status: 200 });
+    },
+  });
+  await client.listServices();
+  assert.ok(!headerKeys.includes('authorization'));
+  assert.ok(!headerKeys.includes('x-aion-tenant-id'));
 });
