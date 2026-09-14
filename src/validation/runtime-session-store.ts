@@ -10,6 +10,7 @@ import type { SessionRecord } from '../domain/session.ts';
 import {
   RuntimeApiError,
   RuntimeClient,
+  runtimeClientOptionsFromEnv,
   runtimeUrlFromEnv,
 } from '../platform/runtime-client.ts';
 import type { RevenueSessionRecord } from '../platform/runtime-contracts.ts';
@@ -165,6 +166,8 @@ export interface CreateSessionStoreOptions {
   dataDir?: string;
   runtimeUrl?: string | null;
   runtimeFetch?: typeof fetch;
+  runtimeApiKey?: string;
+  runtimeTenantId?: string;
   /** Prefer in-memory when Runtime is unset (tests). */
   preferMemory?: boolean;
 }
@@ -176,9 +179,12 @@ export function createSessionStore(opts: CreateSessionStoreOptions = {}): Sessio
       ? undefined
       : opts.runtimeUrl?.trim() || runtimeUrlFromEnv();
   if (url) {
+    const fromEnv = runtimeClientOptionsFromEnv(url);
     return new RuntimeRevenueSessionStore(
       new RuntimeClient({
         baseUrl: url,
+        apiKey: opts.runtimeApiKey ?? fromEnv.apiKey,
+        tenantId: opts.runtimeTenantId ?? fromEnv.tenantId,
         ...(opts.runtimeFetch ? { fetch: opts.runtimeFetch } : {}),
       }),
     );

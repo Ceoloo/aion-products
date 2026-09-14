@@ -3,6 +3,10 @@
  *
  * HARD RULE: numbers on screen come only from these responses.
  * Empty / missing fields render as empty-state — never invent KPIs.
+ *
+ * Auth note (Track A residual): do NOT put AION_RUNTIME_API_KEY (or any
+ * long-lived gateway secret) in VITE_*. Browser bearer auth needs a BFF or
+ * operator-supplied session token. Tenant header is a hint only.
  */
 import type {
   ApprovalRequest,

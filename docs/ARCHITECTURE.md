@@ -71,7 +71,9 @@ engine ─AiTask→ AiExecutionService.run(task)         (src/platform/ai-execut
 ### Week 3 — durable Runtime path
 
 Production submissions go to durable AION Runtime over HTTP (`AION_RUNTIME_URL`
-or `runtimeUrl` on `createCopilot` / `AiExecutionService`). The product remains
+or `runtimeUrl` on `createCopilot` / `AiExecutionService`). Staging/production
+also require `AION_RUNTIME_API_KEY` (Bearer) and `AION_TENANT_ID`
+(`x-aion-tenant-id`) — ADR-005/ADR-007 fail-closed. The product remains
 a Runtime **client**:
 
 ```

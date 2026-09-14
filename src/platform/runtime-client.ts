@@ -11,6 +11,13 @@ export interface RuntimeClientOptions {
   /** Base URL of aion-runtime, e.g. http://127.0.0.1:8080 */
   baseUrl: string;
   fetch?: typeof fetch;
+  /**
+   * Default tenant for Mission 003 isolation.
+   * Sent as `x-aion-tenant-id` on every request when set.
+   */
+  tenantId?: string;
+  /** Bearer token for gateway identity plane (ADR-005). */
+  apiKey?: string;
 }
 
 import {
@@ -41,10 +48,14 @@ export type {
 export class RuntimeClient {
   private readonly baseUrl: string;
   private readonly fetchFn: typeof fetch;
+  private readonly tenantId?: string;
+  private readonly apiKey?: string;
 
   constructor(options: RuntimeClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.fetchFn = options.fetch ?? fetch;
+    this.tenantId = options.tenantId;
+    this.apiKey = options.apiKey;
   }
 
   async submitCommand(input: SubmitCommandRequest): Promise<RuntimeCommandResponse> {
@@ -187,10 +198,20 @@ export class RuntimeClient {
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+    }
+    if (this.tenantId) {
+      headers['x-aion-tenant-id'] = this.tenantId;
+    }
+    if (this.apiKey) {
+      headers['authorization'] = `Bearer ${this.apiKey}`;
+    }
     const res = await this.fetchFn(`${this.baseUrl}${path}`, {
       method,
-      headers: body ? { 'content-type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const text = await res.text();
     let parsed: unknown = {};
@@ -213,10 +234,107 @@ export class RuntimeClient {
   }
 }
 
+/**
+ * Durable deployments (staging/production) must use Runtime HTTP (ADR-007).
+ * Image packaging gates may set AION_ENVIRONMENT=production without a Runtime
+ * only when AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1 is explicit.
+ */
+export function isDurableDeployment(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const name = (env.AION_ENVIRONMENT ?? 'local').trim().toLowerCase();
+  if (name !== 'production' && name !== 'staging' && name !== 'prod') {
+    return false;
+  }
+  if (env.AION_ALLOW_IN_MEMORY_CONTROL_PLANE === '1') return false;
+  return true;
+}
+
 /** Resolve Runtime base URL from env; undefined → in-memory / offline mode. */
 export function runtimeUrlFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   const url = env.AION_RUNTIME_URL?.trim();
   return url && url.length > 0 ? url : undefined;
+}
+
+/**
+ * Resolve Runtime URL with ADR-007 fail-closed semantics: staging/production
+ * require AION_RUNTIME_URL (unless explicitly allowed for packaging gates).
+ */
+export function resolveRuntimeUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const url = runtimeUrlFromEnv(env);
+  if (url) return url;
+  if (isDurableDeployment(env)) {
+    throw new Error(
+      'AION_RUNTIME_URL is required when AION_ENVIRONMENT is production|staging (ADR-007 fail-closed). Set AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1 only for non-durable packaging gates.',
+    );
+  }
+  return undefined;
+}
+
+/** Bearer API key for Runtime gateway (ADR-005). Empty → undefined. */
+export function runtimeApiKeyFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const key = env.AION_RUNTIME_API_KEY?.trim();
+  return key && key.length > 0 ? key : undefined;
+}
+
+/**
+ * Tenant id for `x-aion-tenant-id`. Empty → undefined.
+ * Does not invent a default tenant in local/tests (no silent authority).
+ */
+export function runtimeTenantIdFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const id = env.AION_TENANT_ID?.trim();
+  return id && id.length > 0 ? id : undefined;
+}
+
+/**
+ * Resolve gateway auth for a configured Runtime URL.
+ * Staging/production with a Runtime URL require AION_RUNTIME_API_KEY
+ * (ADR-005 fail-closed). When an API key is present in durable deployments,
+ * AION_TENANT_ID is also required (no silent pilot default).
+ * Local/tests may omit both.
+ */
+export function resolveRuntimeAuth(
+  env: NodeJS.ProcessEnv = process.env,
+  opts?: { runtimeUrl?: string },
+): { apiKey?: string; tenantId?: string } {
+  const url = opts?.runtimeUrl?.trim() || runtimeUrlFromEnv(env);
+  const apiKey = runtimeApiKeyFromEnv(env);
+  const tenantId = runtimeTenantIdFromEnv(env);
+
+  if (url && isDurableDeployment(env) && !apiKey) {
+    throw new Error(
+      'AION_RUNTIME_API_KEY is required when AION_RUNTIME_URL is set and AION_ENVIRONMENT is production|staging (ADR-005 fail-closed).',
+    );
+  }
+  if (apiKey && isDurableDeployment(env) && !tenantId) {
+    throw new Error(
+      'AION_TENANT_ID is required when AION_RUNTIME_API_KEY is set in production|staging (do not invent tenant authority).',
+    );
+  }
+
+  return {
+    ...(apiKey ? { apiKey } : {}),
+    ...(tenantId ? { tenantId } : {}),
+  };
+}
+
+/** Build RuntimeClient options from URL + env auth (ADR-005 / ADR-007). */
+export function runtimeClientOptionsFromEnv(
+  baseUrl: string,
+  env: NodeJS.ProcessEnv = process.env,
+  fetchFn?: typeof fetch,
+): RuntimeClientOptions {
+  return {
+    baseUrl,
+    ...resolveRuntimeAuth(env, { runtimeUrl: baseUrl }),
+    ...(fetchFn ? { fetch: fetchFn } : {}),
+  };
 }

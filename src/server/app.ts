@@ -35,7 +35,11 @@ import {
   buildCallOutcomeAttribution,
   publishCallOutcome,
 } from '../platform/outcome.ts';
-import { RuntimeClient, runtimeUrlFromEnv } from '../platform/runtime-client.ts';
+import {
+  RuntimeClient,
+  resolveRuntimeUrl,
+  runtimeClientOptionsFromEnv,
+} from '../platform/runtime-client.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4173);
@@ -47,8 +51,10 @@ const TOKEN = (process.env.AION_TOKEN ?? '').trim();
 const DATA_DIR = process.env.AION_DATA_DIR ?? join(process.cwd(), 'data');
 /** Runtime-backed when AION_RUNTIME_URL is set; else Json under DATA_DIR. */
 let store: SessionStore = createSessionStore({ dataDir: DATA_DIR });
-const RUNTIME_URL = runtimeUrlFromEnv();
-const runtimeClient = RUNTIME_URL ? new RuntimeClient({ baseUrl: RUNTIME_URL }) : null;
+const RUNTIME_URL = resolveRuntimeUrl();
+const runtimeClient = RUNTIME_URL
+  ? new RuntimeClient(runtimeClientOptionsFromEnv(RUNTIME_URL))
+  : null;
 
 // Whitelists for validating operator-supplied ground truth (defence in depth;
 // combined with escaping on render, this blocks stored XSS / garbage records).

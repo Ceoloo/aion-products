@@ -44,8 +44,14 @@ Open http://127.0.0.1:5174
 | Variable | Default | Purpose |
 |---|---|---|
 | `VITE_AION_RUNTIME_URL` | empty (Vite proxies `/v1` → `http://127.0.0.1:8080`) | Runtime base URL |
-| `VITE_AION_TENANT_ID` | `aion-systems` | Default `x-aion-tenant-id` |
+| `VITE_AION_TENANT_ID` | `aion-systems` | Default `x-aion-tenant-id` (**hint only** — not authority) |
 | `VITE_AION_OPERATOR_ID` | `operator-console` | `decidedBy` on approval decisions |
+
+**Do not bake long-lived gateway secrets into `VITE_*`.** Vite embeds
+`import.meta.env.VITE_*` in the browser bundle. Console bearer auth against
+Runtime requires a server-side BFF or an operator-supplied short-lived session
+token — out of scope for Track A (server path). Tenant header remains a
+client-side hint only.
 
 ## Scripts
 

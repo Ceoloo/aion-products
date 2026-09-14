@@ -1,26 +1,39 @@
 /** Server composition: resolve environment defaults and construct HTTP transports. */
 import { SharedExecutionService, type SharedExecutionConfig } from './shared-execution.ts';
-import { RuntimeClient, runtimeUrlFromEnv } from './runtime-client.ts';
+import {
+  RuntimeClient,
+  resolveRuntimeUrl,
+  runtimeClientOptionsFromEnv,
+} from './runtime-client.ts';
 import type { Effort } from './provider-contracts.ts';
 export type { AiExecutor, AiExecResult } from './shared-execution.ts';
 
 export interface AiExecutionConfig extends Omit<SharedExecutionConfig, 'runtime'> {
   runtimeUrl?: string;
   runtimeFetch?: typeof fetch;
+  runtimeApiKey?: string;
+  runtimeTenantId?: string;
 }
 
 export class AiExecutionService extends SharedExecutionService {
   constructor(cfg: AiExecutionConfig) {
-    const runtimeUrl = cfg.runtimeUrl ?? runtimeUrlFromEnv();
+    // Explicit runtimeUrl (including "") wins; otherwise apply ADR-007 fail-closed resolve.
+    const runtimeUrl =
+      cfg.runtimeUrl !== undefined ? cfg.runtimeUrl.trim() || undefined : resolveRuntimeUrl();
+    const fromEnv = runtimeUrl ? runtimeClientOptionsFromEnv(runtimeUrl) : null;
     super({
       ...cfg,
       model: cfg.model ?? process.env.AION_MODEL ??
         (cfg.llm?.name === 'openrouter' ? process.env.OPENROUTER_MODEL : undefined),
       effort: cfg.effort ?? process.env.AION_EFFORT as Effort | undefined,
-      runtime: runtimeUrl ? new RuntimeClient({
-        baseUrl: runtimeUrl,
-        ...(cfg.runtimeFetch ? { fetch: cfg.runtimeFetch } : {}),
-      }) : null,
+      runtime: runtimeUrl
+        ? new RuntimeClient({
+            baseUrl: runtimeUrl,
+            apiKey: cfg.runtimeApiKey ?? fromEnv?.apiKey,
+            tenantId: cfg.runtimeTenantId ?? fromEnv?.tenantId,
+            ...(cfg.runtimeFetch ? { fetch: cfg.runtimeFetch } : {}),
+          })
+        : null,
     });
   }
 }
