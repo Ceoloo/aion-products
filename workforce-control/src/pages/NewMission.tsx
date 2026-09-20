@@ -20,14 +20,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-/** ModernRelx / Annfiera — live GHL fixture on AION Empire (same IDs as M001). */
-export const MODERNRELX_M001 = {
-  clientName: 'ModernRelx',
-  leadName: 'Annfiera McPherson',
-  contactId: 'MyWCgeFaKnifp6LM7yIc',
-  opportunityId: 'rGbIyrAvGDcmMEzjBER4',
-  pipelineId: 'tPuXeG6L39PgMZp0jEV3',
-  stageId: 'fdd0844f-4260-4522-a8f3-87d361dfb5fa',
+/** Example Client / Sample — live GHL fixture on AION Empire (same IDs as M001). */
+export const SAMPLE_CLIENT_M001 = {
+  clientName: 'Example Client',
+  leadName: 'Sample Lead',
+  contactId: 'fixture_contact_0001',
+  opportunityId: 'fixture_opportunity_0001',
+  pipelineId: 'fixture_stage_0001',
+  stageId: 'fixture_stage_0001',
   missionOrdinal: 1,
   cohortTarget: 100,
 } as const;
@@ -70,15 +70,15 @@ export default function NewMission() {
     [workflowId],
   );
 
-  function applyModernRelxPreset() {
+  function applySamplePreset() {
     setLaunchMode('ol001_production');
     setProductionConfirm(false);
     setWorkflowId(LEAD_TO_APPOINTMENT_V1.id);
     setMissionName(
-      `OL-001 · M${String(MODERNRELX_M001.missionOrdinal).padStart(3, '0')} · ${MODERNRELX_M001.clientName} · ${MODERNRELX_M001.leadName}`,
+      `OL-001 · M${String(SAMPLE_CLIENT_M001.missionOrdinal).padStart(3, '0')} · ${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName}`,
     );
     setObjective(
-      `Qualify and advance ${MODERNRELX_M001.leadName} (${MODERNRELX_M001.clientName}) toward a booked appointment — live GHL opportunity ${MODERNRELX_M001.opportunityId}`,
+      `Qualify and advance ${SAMPLE_CLIENT_M001.leadName} (${SAMPLE_CLIENT_M001.clientName}) toward a booked appointment — live GHL opportunity ${SAMPLE_CLIENT_M001.opportunityId}`,
     );
     setBudget('25');
     setLeadEmail('');
@@ -123,12 +123,12 @@ export default function NewMission() {
     };
 
     if (isProduction) {
-      cohortMeta.missionOrdinal = MODERNRELX_M001.missionOrdinal;
-      cohortMeta.cohortTarget = MODERNRELX_M001.cohortTarget;
-      cohortMeta.clientName = MODERNRELX_M001.clientName;
-      cohortMeta.leadName = MODERNRELX_M001.leadName;
-      cohortMeta.ghlContactId = MODERNRELX_M001.contactId;
-      cohortMeta.ghlOpportunityId = MODERNRELX_M001.opportunityId;
+      cohortMeta.missionOrdinal = SAMPLE_CLIENT_M001.missionOrdinal;
+      cohortMeta.cohortTarget = SAMPLE_CLIENT_M001.cohortTarget;
+      cohortMeta.clientName = SAMPLE_CLIENT_M001.clientName;
+      cohortMeta.leadName = SAMPLE_CLIENT_M001.leadName;
+      cohortMeta.ghlContactId = SAMPLE_CLIENT_M001.contactId;
+      cohortMeta.ghlOpportunityId = SAMPLE_CLIENT_M001.opportunityId;
     }
 
     const actor = {
@@ -156,7 +156,7 @@ export default function NewMission() {
     const name =
       missionName.trim() ||
       (isProduction
-        ? `OL-001 · M001 · ${MODERNRELX_M001.clientName} · ${new Date(stamp).toISOString().slice(0, 16)}`
+        ? `OL-001 · M001 · ${SAMPLE_CLIENT_M001.clientName} · ${new Date(stamp).toISOString().slice(0, 16)}`
         : `PRE-OL · ${template.label} · ${new Date(stamp).toISOString().slice(0, 16)}`);
 
     const body: Record<string, unknown> = {
@@ -197,7 +197,7 @@ export default function NewMission() {
               stepName === 'opportunity' &&
               capability === 'crm.opportunity.create' &&
               isProduction &&
-              MODERNRELX_M001.opportunityId
+              SAMPLE_CLIENT_M001.opportunityId
                 ? 'crm.opportunity.update'
                 : capability;
             return {
@@ -226,10 +226,10 @@ export default function NewMission() {
         source: 'operator-console',
         ...(isProduction
           ? {
-              clientName: MODERNRELX_M001.clientName,
-              missionOrdinal: MODERNRELX_M001.missionOrdinal,
-              ghlContactId: MODERNRELX_M001.contactId,
-              ghlOpportunityId: MODERNRELX_M001.opportunityId,
+              clientName: SAMPLE_CLIENT_M001.clientName,
+              missionOrdinal: SAMPLE_CLIENT_M001.missionOrdinal,
+              ghlContactId: SAMPLE_CLIENT_M001.contactId,
+              ghlOpportunityId: SAMPLE_CLIENT_M001.opportunityId,
             }
           : {}),
         ...(template.secureAutomationStandard
@@ -245,15 +245,15 @@ export default function NewMission() {
         opportunity: {
           provider: 'ghl',
           name: isProduction
-            ? `${MODERNRELX_M001.clientName} · ${MODERNRELX_M001.leadName}`
+            ? `${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName}`
             : `L2A opportunity ${stamp}`,
           ...(isProduction
             ? {
-                contactId: MODERNRELX_M001.contactId,
-                opportunityId: MODERNRELX_M001.opportunityId,
-                pipelineId: MODERNRELX_M001.pipelineId,
-                stage: MODERNRELX_M001.stageId,
-                stageId: MODERNRELX_M001.stageId,
+                contactId: SAMPLE_CLIENT_M001.contactId,
+                opportunityId: SAMPLE_CLIENT_M001.opportunityId,
+                pipelineId: SAMPLE_CLIENT_M001.pipelineId,
+                stage: SAMPLE_CLIENT_M001.stageId,
+                stageId: SAMPLE_CLIENT_M001.stageId,
                 status: 'open',
                 value: 500,
               }
@@ -263,26 +263,26 @@ export default function NewMission() {
         'follow-up-task': {
           provider: 'ghl',
           title: isProduction
-            ? `Book appointment — ${MODERNRELX_M001.leadName}`
+            ? `Book appointment — ${SAMPLE_CLIENT_M001.leadName}`
             : 'Book appointment (human)',
           body: 'SA-STD-001: human books appointment until crm.appointment.* is active',
           // GHL contact tasks require dueDate.
           dueDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
-          ...(isProduction ? { contactId: MODERNRELX_M001.contactId } : {}),
+          ...(isProduction ? { contactId: SAMPLE_CLIENT_M001.contactId } : {}),
         },
         'crm-note': {
           provider: 'ghl',
           body: isProduction
-            ? `OL-001 M001 · ${MODERNRELX_M001.clientName} · ${MODERNRELX_M001.leadName} — qualification note`
+            ? `OL-001 M001 · ${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName} — qualification note`
             : 'Lead-to-Appointment v1 qualification note',
-          ...(isProduction ? { contactId: MODERNRELX_M001.contactId } : {}),
+          ...(isProduction ? { contactId: SAMPLE_CLIENT_M001.contactId } : {}),
         },
         'draft-message': {
           provider: 'ghl',
           body: isProduction
-            ? `Draft follow-up for ${MODERNRELX_M001.leadName} — do not send (OL-001 L2A rules)`
+            ? `Draft follow-up for ${SAMPLE_CLIENT_M001.leadName} — do not send (OL-001 L2A rules)`
             : 'Draft follow-up — do not send (L2A v1 communication rules)',
-          ...(isProduction ? { contactId: MODERNRELX_M001.contactId } : {}),
+          ...(isProduction ? { contactId: SAMPLE_CLIENT_M001.contactId } : {}),
         },
       };
     } else if (leadEmail.trim()) {
@@ -294,9 +294,9 @@ export default function NewMission() {
             source: isProduction ? 'aion-ol001' : 'aion-pre-ol',
             ...(isProduction
               ? {
-                  firstName: 'Annfiera',
-                  lastName: 'McPherson',
-                  contactId: MODERNRELX_M001.contactId,
+                  firstName: 'Sample',
+                  lastName: 'Lead',
+                  contactId: SAMPLE_CLIENT_M001.contactId,
                 }
               : {}),
           },
@@ -383,8 +383,8 @@ export default function NewMission() {
             >
               OL-001 Production
             </Button>
-            <Button type="button" variant="secondary" onClick={applyModernRelxPreset}>
-              ModernRelx M001 preset
+            <Button type="button" variant="secondary" onClick={applySamplePreset}>
+              Example Client M001 preset
             </Button>
           </div>
           {isProduction ? (
@@ -393,8 +393,8 @@ export default function NewMission() {
                 Tags <span className="font-mono">cohort=OL-001</span> and{' '}
                 <span className="font-mono">productionEconomic=true</span>. Counts as{' '}
                 <span className="font-mono">
-                  M{String(MODERNRELX_M001.missionOrdinal).padStart(3, '0')} /{' '}
-                  {MODERNRELX_M001.cohortTarget}
+                  M{String(SAMPLE_CLIENT_M001.missionOrdinal).padStart(3, '0')} /{' '}
+                  {SAMPLE_CLIENT_M001.cohortTarget}
                 </span>{' '}
                 when Runtime accepts the run.
               </p>
@@ -432,7 +432,7 @@ export default function NewMission() {
             onChange={(e) => setMissionName(e.target.value)}
             placeholder={
               isProduction
-                ? 'OL-001 · M001 · ModernRelx · …'
+                ? 'OL-001 · M001 · Example Client · …'
                 : 'PRE-OL · … (auto if empty)'
             }
             required={isProduction}
@@ -500,7 +500,7 @@ export default function NewMission() {
             onChange={(e) => setLeadEmail(e.target.value)}
             placeholder={
               isProduction
-                ? 'Real lead email for ModernRelx / Annfiera'
+                ? 'Real lead email for Example Client / Sample'
                 : 'Uses placeholder @example.invalid if empty'
             }
             required={isProduction}
