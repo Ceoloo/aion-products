@@ -1,5 +1,5 @@
 /**
- * Session helpers for the Console BFF.
+ * Session helpers for the Console BFF (Hono backend service).
  *
  * The browser never sees a Runtime bearer token or the login secret — it
  * only ever holds an httpOnly session cookie. This file signs/verifies that
@@ -11,12 +11,14 @@
  *   SESSION_SIGNING_SECRET   HMAC key for signing session cookies
  *   AION_GATEWAY_TOKEN       real Runtime bearer token (principal_ops_console)
  *   RUNTIME_URL              Runtime origin, e.g. https://runtime.<domain>
+ *
+ * Pure string-in/string-out functions — framework-agnostic, no req/res
+ * coupling, so they work the same under Hono, tests, or anything else.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 
-const COOKIE_NAME = 'aion_console_session';
-const SESSION_TTL_SECONDS = 12 * 60 * 60; // 12h
+export const SESSION_COOKIE_NAME = 'aion_console_session';
+export const SESSION_TTL_SECONDS = 12 * 60 * 60; // 12h
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -43,50 +45,15 @@ export function checkLoginSecret(candidate: string): boolean {
   return timingSafeStringEqual(candidate, requireEnv('CONSOLE_LOGIN_SECRET'));
 }
 
-/** Builds a signed `name=value` Set-Cookie header value (caller adds attributes). */
+/** Builds the signed cookie value (caller sets it with whatever cookie attributes). */
 export function makeSessionCookieValue(): string {
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
   const payload = `v1.${expiresAt}`;
   return `${payload}.${sign(payload)}`;
 }
 
-export function setSessionCookie(res: ServerResponse): void {
-  const value = makeSessionCookieValue();
-  const secure = process.env.VERCEL_ENV !== 'development' ? '; Secure' : '';
-  res.setHeader(
-    'Set-Cookie',
-    `${COOKIE_NAME}=${value}; HttpOnly${secure}; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_SECONDS}`,
-  );
-}
-
-export function clearSessionCookie(res: ServerResponse): void {
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
-}
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const part of header.split(';')) {
-    const idx = part.indexOf('=');
-    if (idx === -1) continue;
-    const k = part.slice(0, idx).trim();
-    const v = part.slice(idx + 1).trim();
-    if (k) {
-      try {
-        out[k] = decodeURIComponent(v);
-      } catch {
-        // Ignore malformed unrelated cookies and treat a malformed session as absent.
-        continue;
-      }
-    }
-  }
-  return out;
-}
-
-/** Returns true iff the request carries a validly-signed, unexpired session cookie. */
-export function hasValidSession(req: IncomingMessage): boolean {
-  const cookies = parseCookies(req.headers.cookie);
-  const raw = cookies[COOKIE_NAME];
+/** Returns true iff the given cookie value is validly-signed and unexpired. */
+export function verifySessionCookieValue(raw: string | undefined | null): boolean {
   if (!raw) return false;
   const lastDot = raw.lastIndexOf('.');
   if (lastDot === -1) return false;
