@@ -66,7 +66,11 @@ app.all('/api/runtime/*', async (c) => {
     return c.json({ error: 'bff_misconfigured', message: 'RUNTIME_URL / AION_GATEWAY_TOKEN not set' }, 500);
   }
 
-  const pathStr = c.req.param('*') ?? '';
+  // c.req.param('*') was observed resolving to empty in production for every
+  // request regardless of the real path (root cause of a prior live bug —
+  // every call silently hit RUNTIME_URL's root instead of the real path).
+  // Stripping the known prefix from c.req.path directly is unambiguous.
+  const pathStr = c.req.path.replace(/^\/api\/runtime\//, '');
   const qs = c.req.query();
   const qsStr = Object.keys(qs).length ? `?${new URLSearchParams(qs).toString()}` : '';
   const target = `${runtimeUrl.replace(/\/$/, '')}/${pathStr}${qsStr}`;
