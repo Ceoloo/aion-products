@@ -112,7 +112,7 @@ From repo root:
 | | |
 |---|---|
 | Console | https://aion-operator-console.vercel.app |
-| Runtime | `VITE_AION_RUNTIME_URL` baked at build (currently Hostinger Runtime) |
+| Runtime | Same-origin `/api/runtime/*` BFF; server-only `RUNTIME_URL` selects the Runtime |
 | Tenant hint | `aion-systems` (`VITE_AION_TENANT_ID`) — **not authority** |
 
 Deep links (`/ol001`, `/missions/:id`, …) require SPA rewrites in `vercel.json`

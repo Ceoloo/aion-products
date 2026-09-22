@@ -16,23 +16,23 @@ import ImplementationDetail from '@/pages/ImplementationDetail';
  * HARD RULE: metrics from Runtime/Data only; writes only via governed APIs.
  */
 export default function App() {
-  return (
-    <LoginGate>
-      <TenantProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<HoldingOverview />} />
-            <Route path="/ol001" element={<Ol001Scoreboard />} />
-            <Route path="/implementations" element={<Implementations />} />
-            <Route path="/implementations/new" element={<NewImplementation />} />
-            <Route path="/implementations/:caseId" element={<ImplementationDetail />} />
-            <Route path="/missions" element={<MissionControl />} />
-            <Route path="/missions/new" element={<NewMission />} />
-            <Route path="/missions/:missionId" element={<MissionDetail />} />
-            <Route path="/executions/:executionId" element={<ExecutionDetail />} />
-          </Routes>
-        </BrowserRouter>
-      </TenantProvider>
-    </LoginGate>
+  const content = (
+    <TenantProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HoldingOverview />} />
+          <Route path="/ol001" element={<Ol001Scoreboard />} />
+          <Route path="/implementations" element={<Implementations />} />
+          <Route path="/implementations/new" element={<NewImplementation />} />
+          <Route path="/implementations/:caseId" element={<ImplementationDetail />} />
+          <Route path="/missions" element={<MissionControl />} />
+          <Route path="/missions/new" element={<NewMission />} />
+          <Route path="/missions/:missionId" element={<MissionDetail />} />
+          <Route path="/executions/:executionId" element={<ExecutionDetail />} />
+        </Routes>
+      </BrowserRouter>
+    </TenantProvider>
   );
+
+  return import.meta.env.VITE_AION_RUNTIME_URL ? content : <LoginGate>{content}</LoginGate>;
 }

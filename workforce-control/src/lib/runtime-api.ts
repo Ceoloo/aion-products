@@ -63,6 +63,9 @@ async function request<T>(
   }
   if (!res.ok) {
     const err = (body && typeof body === 'object' ? body : {}) as { error?: string; message?: string };
+    if (!DIRECT_RUNTIME_URL && res.status === 401 && err.error === 'not_authenticated') {
+      window.dispatchEvent(new Event('aion:session-expired'));
+    }
     throw new RuntimeHttpError(
       res.status,
       err.error ?? 'http_error',
