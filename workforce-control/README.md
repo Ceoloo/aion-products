@@ -64,7 +64,12 @@ token:
 
 - `POST /api/login` — operator submits a shared secret; on match, sets an
   httpOnly/Secure/SameSite=Strict signed session cookie (~12h).
-- `POST /api/logout` — clears the cookie.
+- `POST /api/logout` — clears the browser's cookie. Sessions are stateless
+  signed tokens (no server-side revocation list), so this is client-side
+  only: a raw cookie value captured before logout stays valid until its
+  natural 12h expiry. Acceptable for a single-operator tool behind
+  HttpOnly/Secure/SameSite=Strict; would need a server-side session store to
+  do real revocation.
 - `GET /api/session` — `{authenticated: boolean}`, used by `LoginGate` to
   decide whether to show the sign-in form.
 - `ALL /api/runtime/*` — the one proxy route. Verifies the session cookie,
