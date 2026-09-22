@@ -4,9 +4,12 @@
  * HARD RULE: numbers on screen come only from these responses.
  * Empty / missing fields render as empty-state — never invent KPIs.
  *
- * Auth note (Track A residual): do NOT put AION_RUNTIME_API_KEY (or any
- * long-lived gateway secret) in VITE_*. Browser bearer auth needs a BFF or
- * operator-supplied session token. Tenant header is a hint only.
+ * Auth: the browser never holds a Runtime bearer token. By default every
+ * call goes same-origin to the Console's own BFF (/api/runtime/*, see
+ * api/runtime/[...path].ts), which attaches the real token server-side
+ * after checking the operator's session cookie. VITE_AION_RUNTIME_URL is an
+ * escape hatch for local dev against a local `open`-auth-mode Runtime
+ * (bypasses the BFF entirely — never set this in production).
  */
 import type {
   ApprovalRequest,
@@ -17,7 +20,8 @@ import type {
   OutcomeRecord,
 } from './types';
 
-const RUNTIME_URL = (import.meta.env.VITE_AION_RUNTIME_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+const DIRECT_RUNTIME_URL = (import.meta.env.VITE_AION_RUNTIME_URL as string | undefined)?.replace(/\/$/, '');
+const RUNTIME_URL = DIRECT_RUNTIME_URL || '/api/runtime';
 const DEFAULT_TENANT = (import.meta.env.VITE_AION_TENANT_ID as string | undefined) ?? 'aion-systems';
 
 export class RuntimeHttpError extends Error {
@@ -150,17 +154,16 @@ export const RuntimeApi = {
 
   /**
    * Governed human gate — UI never invents authority; Runtime decides.
-   * Body must include a full human `actor` matching `decidedBy` so
-   * `approvals.decided_by` FK / attribution stay coherent.
+   * In required auth mode the approver identity is derived server-side from
+   * the authenticated principal (aion-runtime PR #48) — the body only ever
+   * carries the decision itself, never a client-asserted identity.
    */
   decideApproval(
     tenantId: string,
     approvalId: string,
     body: {
       approve: boolean;
-      decidedBy: string;
       note?: string;
-      actor: Record<string, unknown>;
     },
   ) {
     return request<{

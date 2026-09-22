@@ -6,39 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 
-const DECIDED_BY =
-  (import.meta.env.VITE_AION_OPERATOR_ID as string | undefined) ?? 'operator-console';
-
-/** Human actor stamped on every Console approval decision (satisfies actors FK). */
-function consoleApproverActor(
-  tenantId: string,
-  opts?: { productionEconomic?: boolean },
-) {
-  const productionEconomic = opts?.productionEconomic === true;
-  return {
-    actorType: 'human' as const,
-    actorId: DECIDED_BY,
-    name: 'Operator Console Approver',
-    email: 'operator-console@aion.local',
-    permissions: [
-      'crm.opportunity.create',
-      'crm.opportunity.update',
-      'crm.contact.update',
-      'crm.note.create',
-      'crm.task.create',
-      'crm.message.send',
-    ],
-    maxRiskLevel: 'R3',
-    tenantId,
-    companyId: 'co_aion',
-    metadata: {
-      source: 'operator-console',
-      cohort: productionEconomic ? 'OL-001' : 'pre_ol_validation',
-      productionEconomic,
-    },
-  };
-}
-
 /**
  * Approval queue — inspect + decide via Runtime POST /v1/approvals/:id/decision.
  * UI is not the authority; every Approve/Deny is a governed capability call.
@@ -68,24 +35,12 @@ export function ApprovalPanel({
   async function decide(approval: ApprovalRequest, approve: boolean) {
     setBusyId(approval.approvalId);
     setActionError(null);
-    const cmdMeta =
-      approval.command &&
-      typeof approval.command === 'object' &&
-      approval.command !== null &&
-      'metadata' in approval.command &&
-      typeof (approval.command as { metadata?: unknown }).metadata === 'object'
-        ? ((approval.command as { metadata?: Record<string, unknown> }).metadata ??
-          {})
-        : {};
-    const productionEconomic = cmdMeta.productionEconomic === true;
     try {
       await RuntimeApi.decideApproval(tenantId, approval.approvalId, {
         approve,
-        decidedBy: DECIDED_BY,
         note: approve
           ? 'approved via Operator Console'
           : 'denied via Operator Console',
-        actor: consoleApproverActor(tenantId, { productionEconomic }),
       });
       onDecided?.();
     } catch (err: unknown) {
@@ -114,7 +69,7 @@ export function ApprovalPanel({
           <div>
             <div className="font-display text-lg">Approval queue</div>
             <p className="text-xs text-muted-foreground">
-              Decide via Runtime · decidedBy={DECIDED_BY}
+              Decide via Runtime · identity derived from your session
             </p>
           </div>
           <Button type="button" size="icon" variant="ghost" onClick={onClose}>
