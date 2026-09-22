@@ -123,10 +123,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="fixed right-4 top-4 z-50">
+      <div className="fixed right-4 top-4 z-50 flex flex-col items-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={handleLogout} disabled={loggingOut}>
           {loggingOut ? 'Signing out…' : 'Sign out'}
         </Button>
+        {error && <p className="max-w-xs text-right text-sm text-destructive">{error}</p>}
       </div>
       {children}
     </>
