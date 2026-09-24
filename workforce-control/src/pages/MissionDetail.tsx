@@ -27,7 +27,10 @@ export default function MissionDetail() {
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
-  const [waiverReason, setWaiverReason] = useState('GHL HTTP 422');
+  const [outcomeSummary, setOutcomeSummary] = useState('');
+  const [businessValue, setBusinessValue] = useState('');
+  const [waivedStep, setWaivedStep] = useState('');
+  const [waiverReason, setWaiverReason] = useState('');
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [tick, setTick] = useState(0);
@@ -112,65 +115,90 @@ export default function MissionDetail() {
       : mission.status
     : null;
 
-  async function reloadMission() {
-    const m = await RuntimeApi.getMission(tenantId, missionId);
-    setMission(m.mission ?? null);
-  }
-
+  /**
+   * Close the mission with evidence the Runtime can account for:
+   *  1. a durable `realized` Outcome (USD value) on the mission's latest run —
+   *     this is what mission economics counts as attributed value;
+   *  2. a mission PATCH whose terminalOutcome references that outcome and the
+   *     Runtime-computed human intervention count.
+   * Every field comes from the operator or the Runtime; nothing is prefilled.
+   */
   async function closeMission(mode: 'completed' | 'completed_with_exception') {
     if (!mission) return;
+    const summary = outcomeSummary.trim();
+    const value = Number(businessValue);
+    const exceptionStep = waivedStep.trim();
+    const exceptionReason = waiverReason.trim();
+    if (!summary) {
+      setCloseError('Outcome summary is required.');
+      return;
+    }
+    if (businessValue.trim() === '' || !Number.isFinite(value) || value < 0) {
+      setCloseError('Business value must be a number ≥ 0 (USD). Enter 0 if none was realized.');
+      return;
+    }
+    if (mode === 'completed_with_exception' && (!exceptionStep || !exceptionReason)) {
+      setCloseError('An exception close needs the waived step and the exact reason.');
+      return;
+    }
+    const anchor = [...executions]
+      .filter((e) => e.runId)
+      .sort((a, b) =>
+        String(b.completedAt ?? b.updatedAt ?? b.createdAt ?? '').localeCompare(
+          String(a.completedAt ?? a.updatedAt ?? a.createdAt ?? ''),
+        ),
+      )[0];
+    if (!anchor?.runId) {
+      setCloseError('This mission has no runs yet — there is nothing to attach an outcome to.');
+      return;
+    }
+
     setClosing(true);
     setCloseError(null);
     try {
-      const approvals = economics?.approvals ?? 0;
-      const executionCount = economics?.totalExecutions ?? executions.length;
-      const costUnits = economics?.totalCostUnits ?? 0;
-      if (mode === 'completed') {
-        await RuntimeApi.patchMission(tenantId, mission.missionId, {
-          status: 'completed',
-          metadata: {
-            outcomeStatus: 'completed',
-            terminalOutcome: {
-              status: 'completed',
-              approvals,
-              executions: executionCount,
-              executionCostUnits: costUnits,
-              humanIntervention: 'recorded',
-              closedAt: new Date().toISOString(),
-              closedFrom: 'operator-console',
-            },
+      const closedAt = new Date().toISOString();
+      const { outcome } = await RuntimeApi.createOutcome(tenantId, {
+        runId: anchor.runId,
+        missionId: mission.missionId,
+        status: 'realized',
+        outcomeType: 'mission.terminal',
+        value,
+        currency: 'USD',
+        measuredAt: closedAt,
+        metadata: {
+          summary,
+          closeMode: mode,
+          closedFrom: 'operator-console',
+          ...(mode === 'completed_with_exception'
+            ? { exception: { waivedStep: exceptionStep, reason: exceptionReason } }
+            : {}),
+        },
+      });
+      // Re-read economics so the recorded counts include this outcome.
+      const { economics: econ } = await RuntimeApi.getMissionEconomics(tenantId, mission.missionId);
+      await RuntimeApi.patchMission(tenantId, mission.missionId, {
+        status: 'completed',
+        metadata: {
+          outcomeStatus: mode,
+          terminalOutcome: {
+            status: mode,
+            summary,
+            outcomeId: outcome.outcomeId,
+            businessValue: value,
+            currency: 'USD',
+            humanInterventions: econ?.humanInterventions ?? 0,
+            approvals: econ?.approvals ?? 0,
+            executions: econ?.totalExecutions ?? executions.length,
+            executionCostUnits: econ?.totalCostUnits ?? 0,
+            ...(mode === 'completed_with_exception'
+              ? { waivedStep: exceptionStep, reason: exceptionReason }
+              : {}),
+            closedAt,
+            closedFrom: 'operator-console',
           },
-        });
-      } else {
-        const reason = waiverReason.trim() || 'GHL HTTP 422';
-        await RuntimeApi.patchMission(tenantId, mission.missionId, {
-          status: 'completed',
-          metadata: {
-            outcomeStatus: 'completed_with_exception',
-            terminalOutcome: {
-              status: 'completed_with_exception',
-              approvals,
-              executions: executionCount,
-              executionCostUnits: costUnits,
-              humanIntervention: 'recorded',
-              waivedStep: 'crm.task.create',
-              reason,
-              steps: {
-                opportunityProgression: 'PASS',
-                crmNote: 'PASS',
-                draftMessage: 'PASS',
-                taskCreate: `WAIVED — ${reason}`,
-              },
-              workflowDefectFound: 'create-vs-update routing',
-              workflowDefectFixed: true,
-              externalIntegrationDefect: 'crm.task.create / GHL',
-              closedAt: new Date().toISOString(),
-              closedFrom: 'operator-console',
-            },
-          },
-        });
-      }
-      await reloadMission();
+        },
+      });
+      setTick((t) => t + 1);
     } catch (err: unknown) {
       setCloseError(err instanceof Error ? err.message : 'Failed to close mission');
     } finally {
@@ -242,18 +270,46 @@ export default function MissionDetail() {
             Close mission
           </h2>
           <p className="mb-3 text-xs text-muted-foreground max-w-2xl">
-            After the single evidence-driven <span className="font-mono">crm.task.create</span> retry:
-            close normally on success, or record a visible exception waiver on 422.
-            Do not leave M001 active.
+            Records a realized business outcome on the mission&apos;s latest run, then closes the
+            mission with the Runtime&apos;s intervention count and cost. Use the exception close only
+            when a step was waived, and say exactly which and why.
           </p>
           <div className="space-y-3 rounded-md border border-border/70 p-3 max-w-xl">
             <label className="block text-xs text-muted-foreground">
-              Waiver reason (used only for completed_with_exception)
+              Outcome summary
+              <input
+                className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                value={outcomeSummary}
+                onChange={(e) => setOutcomeSummary(e.target.value)}
+                placeholder="What changed in the business"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Business value realized (USD)
+              <input
+                className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm"
+                inputMode="decimal"
+                value={businessValue}
+                onChange={(e) => setBusinessValue(e.target.value)}
+                placeholder="0"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Waived step (exception close only)
+              <input
+                className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs"
+                value={waivedStep}
+                onChange={(e) => setWaivedStep(e.target.value)}
+                placeholder="e.g. crm.task.create"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Exception reason (exception close only)
               <input
                 className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs"
                 value={waiverReason}
                 onChange={(e) => setWaiverReason(e.target.value)}
-                placeholder="GHL HTTP 422 — exact body"
+                placeholder="Exact error or reason"
               />
             </label>
             {closeError && <p className="text-sm text-destructive">{closeError}</p>}
@@ -284,47 +340,64 @@ export default function MissionDetail() {
             Terminal outcome
           </h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            Recorded on the mission — waivers are visible here, not silent.
+            Recorded on the mission and backed by a durable outcome — waivers are visible here, not silent.
           </p>
           <dl className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm border border-border/70 rounded-md p-3">
-            <div>
-              <dt className="text-muted-foreground text-xs">status</dt>
-              <dd className="font-mono">{String(terminalOutcome.status ?? '—')}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground text-xs">approvals</dt>
-              <dd className="font-mono">{String(terminalOutcome.approvals ?? '—')}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground text-xs">executions</dt>
-              <dd className="font-mono">{String(terminalOutcome.executions ?? '—')}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground text-xs">executionCostUnits</dt>
-              <dd className="font-mono">{String(terminalOutcome.executionCostUnits ?? '—')}</dd>
-            </div>
-            <div className="md:col-span-2">
-              <dt className="text-muted-foreground text-xs">steps</dt>
-              <dd className="font-mono text-xs whitespace-pre-wrap mt-1">
-                {typeof terminalOutcome.steps === 'object' && terminalOutcome.steps
-                  ? JSON.stringify(terminalOutcome.steps, null, 2)
-                  : String(terminalOutcome.steps ?? '—')}
-              </dd>
-            </div>
-            <div className="md:col-span-2">
-              <dt className="text-muted-foreground text-xs">workflowDefect</dt>
-              <dd className="font-mono text-xs mt-1">
-                found={String((terminalOutcome as { workflowDefectFound?: unknown }).workflowDefectFound ?? '—')}
-                {' · '}
-                fixed={String((terminalOutcome as { workflowDefectFixed?: unknown }).workflowDefectFixed ?? '—')}
-              </dd>
-            </div>
-            <div className="md:col-span-2">
-              <dt className="text-muted-foreground text-xs">externalIntegrationDefect</dt>
-              <dd className="font-mono text-xs mt-1">
-                {String(terminalOutcome.externalIntegrationDefect ?? '—')}
-              </dd>
-            </div>
+            {(
+              [
+                ['status', terminalOutcome.status],
+                ['summary', terminalOutcome.summary],
+                ['businessValue', terminalOutcome.businessValue != null
+                  ? `${String(terminalOutcome.businessValue)} ${String(terminalOutcome.currency ?? '')}`.trim()
+                  : undefined],
+                ['humanInterventions', typeof terminalOutcome.humanInterventions === 'number'
+                  ? terminalOutcome.humanInterventions
+                  : undefined],
+                ['approvals', terminalOutcome.approvals],
+                ['executions', terminalOutcome.executions],
+                ['executionCostUnits', terminalOutcome.executionCostUnits],
+                ['outcomeId', terminalOutcome.outcomeId],
+                ['waivedStep', terminalOutcome.waivedStep],
+                ['reason', terminalOutcome.reason],
+                ['closedAt', terminalOutcome.closedAt],
+              ] as [string, unknown][]
+            )
+              .filter(([, v]) => v !== undefined && v !== null && v !== '')
+              .map(([k, v]) => (
+                <div key={k}>
+                  <dt className="text-muted-foreground text-xs">{k}</dt>
+                  <dd className="font-mono break-words">{String(v)}</dd>
+                </div>
+              ))}
+            {/* Legacy OL-001 M001 close records carried these step/defect fields. */}
+            {terminalOutcome.steps != null && (
+              <div className="md:col-span-2">
+                <dt className="text-muted-foreground text-xs">steps</dt>
+                <dd className="font-mono text-xs whitespace-pre-wrap mt-1">
+                  {typeof terminalOutcome.steps === 'object'
+                    ? JSON.stringify(terminalOutcome.steps, null, 2)
+                    : String(terminalOutcome.steps)}
+                </dd>
+              </div>
+            )}
+            {terminalOutcome.workflowDefectFound != null && (
+              <div className="md:col-span-2">
+                <dt className="text-muted-foreground text-xs">workflowDefect</dt>
+                <dd className="font-mono text-xs mt-1">
+                  found={String(terminalOutcome.workflowDefectFound)}
+                  {' · '}
+                  fixed={String(terminalOutcome.workflowDefectFixed ?? '—')}
+                </dd>
+              </div>
+            )}
+            {terminalOutcome.externalIntegrationDefect != null && (
+              <div className="md:col-span-2">
+                <dt className="text-muted-foreground text-xs">externalIntegrationDefect</dt>
+                <dd className="font-mono text-xs mt-1">
+                  {String(terminalOutcome.externalIntegrationDefect)}
+                </dd>
+              </div>
+            )}
           </dl>
         </section>
       )}

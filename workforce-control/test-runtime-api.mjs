@@ -48,6 +48,25 @@ test('Runtime client reports gateway failures instead of a successful empty dash
     };
     const got = await RuntimeApi.getOutcome('test', 'out_1');
     assert.equal(got.outcome.outcomeId, 'out_1');
+
+    globalThis.fetch = async (input, init) => {
+      assert.match(String(input), /\/v1\/outcomes$/);
+      assert.equal(init.method, 'POST');
+      assert.equal(init.headers['x-aion-tenant-id'], 'test');
+      assert.equal(init.headers['content-type'], 'application/json');
+      const sent = JSON.parse(init.body);
+      assert.deepEqual(sent, {
+        runId: 'run_1', missionId: 'm1', status: 'realized', outcomeType: 'mission.terminal',
+        value: 1500, currency: 'USD',
+      });
+      return new Response(JSON.stringify({ outcome: { outcomeId: 'out_2', ...sent } }), { status: 201 });
+    };
+    const created = await RuntimeApi.createOutcome('test', {
+      runId: 'run_1', missionId: 'm1', status: 'realized', outcomeType: 'mission.terminal',
+      value: 1500, currency: 'USD',
+    });
+    assert.equal(created.outcome.outcomeId, 'out_2');
+    assert.equal(created.outcome.value, 1500);
   } finally {
     globalThis.fetch = originalFetch;
     await rm(dir, { recursive: true, force: true });
