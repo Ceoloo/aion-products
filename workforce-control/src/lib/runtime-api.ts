@@ -365,6 +365,29 @@ export const RuntimeApi = {
     );
   },
 
+  /**
+   * Record a durable business outcome on a run. Runtime links it to the run's
+   * Execution Object; `realized` value feeds mission economics (attributed EV).
+   */
+  createOutcome(
+    tenantId: string,
+    body: {
+      runId: string;
+      missionId?: string;
+      status?: 'pending' | 'realized' | 'failed' | 'unknown';
+      outcomeType?: string;
+      value?: number;
+      currency?: string;
+      measuredAt?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    return request<{ outcome: OutcomeRecord }>('/v1/outcomes', tenantId, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
   getOutcome(tenantId: string, outcomeId: string) {
     return request<{ outcome: OutcomeRecord }>(
       `/v1/outcomes/${encodeURIComponent(outcomeId)}`,
