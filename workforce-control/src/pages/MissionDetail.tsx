@@ -141,15 +141,33 @@ export default function MissionDetail() {
       setCloseError('An exception close needs the waived step and the exact reason.');
       return;
     }
-    const anchor = [...executions]
-      .filter((e) => e.runId)
-      .sort((a, b) =>
-        String(b.completedAt ?? b.updatedAt ?? b.createdAt ?? '').localeCompare(
-          String(a.completedAt ?? a.updatedAt ?? a.createdAt ?? ''),
-        ),
-      )[0];
-    if (!anchor?.runId) {
-      setCloseError('This mission has no runs yet — there is nothing to attach an outcome to.');
+    // A retry after a partial failure must not record the value twice: reuse the
+    // terminal outcome already on this mission, and refuse a conflicting value.
+    const existingTerminal = outcomes.find(
+      (o) => o.outcomeType === 'mission.terminal' && o.status === 'realized',
+    );
+    if (existingTerminal && existingTerminal.value !== value) {
+      setCloseError(
+        `A terminal outcome (${existingTerminal.outcomeId}) is already recorded with value ` +
+          `${String(existingTerminal.value)} ${existingTerminal.currency ?? ''}. Enter that value to finish closing.`,
+      );
+      return;
+    }
+    // Executions come from a tenant-wide recent page; fall back to the runs the
+    // mission's own outcomes reference so older missions still have an anchor.
+    const anchorRunId =
+      [...executions]
+        .filter((e) => e.runId)
+        .sort((a, b) =>
+          String(b.completedAt ?? b.updatedAt ?? b.createdAt ?? '').localeCompare(
+            String(a.completedAt ?? a.updatedAt ?? a.createdAt ?? ''),
+          ),
+        )[0]?.runId ??
+      [...outcomes].sort((a, b) =>
+        String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')),
+      )[0]?.runId;
+    if (!existingTerminal && !anchorRunId) {
+      setCloseError('No run found for this mission — there is nothing to attach an outcome to.');
       return;
     }
 
@@ -157,8 +175,8 @@ export default function MissionDetail() {
     setCloseError(null);
     try {
       const closedAt = new Date().toISOString();
-      const { outcome } = await RuntimeApi.createOutcome(tenantId, {
-        runId: anchor.runId,
+      const outcome = existingTerminal ?? (await RuntimeApi.createOutcome(tenantId, {
+        runId: anchorRunId!,
         missionId: mission.missionId,
         status: 'realized',
         outcomeType: 'mission.terminal',
@@ -173,7 +191,7 @@ export default function MissionDetail() {
             ? { exception: { waivedStep: exceptionStep, reason: exceptionReason } }
             : {}),
         },
-      });
+      })).outcome;
       // Re-read economics so the recorded counts include this outcome.
       const { economics: econ } = await RuntimeApi.getMissionEconomics(tenantId, mission.missionId);
       await RuntimeApi.patchMission(tenantId, mission.missionId, {
@@ -201,6 +219,7 @@ export default function MissionDetail() {
       setTick((t) => t + 1);
     } catch (err: unknown) {
       setCloseError(err instanceof Error ? err.message : 'Failed to close mission');
+      setTick((t) => t + 1); // reload outcomes so a retry reuses anything already recorded
     } finally {
       setClosing(false);
     }
