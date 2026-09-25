@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import { Bot, Handshake, Sparkles, TriangleAlert, Zap } from 'lucide-react';
+import { Bot, Handshake, ListOrdered, TriangleAlert, Zap } from 'lucide-react';
 import { AionApi, type ReadinessReport, type SchemaInfo } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -48,13 +48,15 @@ export function LaunchPad({
   return (
     <div className="room-enter grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
       <section className="panel overflow-hidden">
-        <div className="atlas-glow border-b border-border/60 px-6 py-7 md:px-8 md:py-9">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Engage</p>
-          <h1 className="mt-2 max-w-xl font-display text-3xl font-bold leading-[1.1] text-balance md:text-4xl">
-            Walk the sale with your copilot — or let it drive the next move.
+        <div className="border-b border-border/60 px-6 py-7 md:px-8 md:py-9">
+          <p className="font-display text-sm font-bold tracking-tight text-primary md:text-base">
+            AION <span className="text-foreground/80">·</span> Revenue Copilot
+          </p>
+          <h1 className="mt-3 max-w-xl font-display text-3xl font-bold leading-[1.1] text-balance md:text-4xl">
+            Walk the sale — or let the cockpit drive the next move.
           </h1>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground md:text-base">
-            GoHighLevel owns the CRM. Revenue Copilot is the live sales IDE: listen, guide, advance the ladder, and hand outcomes back into the AION pipeline.
+            GoHighLevel owns the CRM. This room is the live sales IDE: listen, guide, advance the ladder, and hand outcomes back into the AION pipeline.
           </p>
         </div>
 
@@ -169,8 +171,8 @@ export function LaunchPad({
 
       <aside className="space-y-4">
         <div className="panel p-6">
-          <div className="flex items-center gap-2 text-primary">
-            <Sparkles className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <ListOrdered className="h-4 w-4" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">How this works</span>
           </div>
           <ol className="mt-4 space-y-4 text-sm text-muted-foreground">
@@ -304,7 +306,7 @@ function ReadinessStrip() {
   return (
     <div className={cn('rounded-xl border px-3 py-2.5 text-sm', tone)}>
       <button type="button" className="flex w-full items-center gap-2 text-left font-medium" onClick={() => setOpen((o) => !o)}>
-        {blockers.length ? <TriangleAlert className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+        {blockers.length ? <TriangleAlert className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
         <span>
           {blockers.length
             ? `Systems not ready — ${blockers.length} blocker${blockers.length > 1 ? 's' : ''}`

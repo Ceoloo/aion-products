@@ -32,22 +32,21 @@ export function CockpitShell({
       <header className="relative z-20 border-b border-border/70 bg-background/50 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-[1600px] items-center gap-4 px-4 py-3 md:px-6">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                <span className="font-display text-sm font-bold">A</span>
-              </div>
-              <div className="min-w-0">
-                <div className="font-display text-base font-bold leading-none tracking-tight md:text-lg">
-                  Revenue Copilot
-                </div>
-                <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  Sales cockpit · CRM stays in GoHighLevel
-                </div>
-              </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-base font-bold tracking-tight md:text-lg">AION</span>
+              <span className="font-display text-base font-semibold tracking-tight text-foreground/90 md:text-lg">
+                Revenue Copilot
+              </span>
+            </div>
+            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              Sales cockpit · CRM stays in GoHighLevel
             </div>
           </div>
 
-          <nav className="ml-auto hidden items-center gap-1 rounded-full border border-border/70 bg-card/50 p-1 md:flex" aria-label="Rooms">
+          <nav
+            className="ml-auto hidden items-center gap-0.5 rounded-lg border border-border/70 bg-card/40 p-1 md:flex"
+            aria-label="Rooms"
+          >
             {ROOMS.map(({ id, label, hint, Icon }) => {
               const active = room === id;
               return (
@@ -57,8 +56,8 @@ export function CockpitShell({
                   title={hint}
                   onClick={() => onNav(id)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-all',
-                    active && 'bg-primary text-primary-foreground shadow-sm',
+                    'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors',
+                    active && 'bg-primary text-primary-foreground',
                     !active && 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                     id === 'live' && live && !active && 'text-live',
                   )}
