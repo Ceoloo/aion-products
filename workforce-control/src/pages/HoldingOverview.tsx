@@ -7,6 +7,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { ApprovalRequest, EconomicsRollup, ExecutionObject, Mission } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   AttentionRail,
   EmptyState,
@@ -15,17 +16,10 @@ import {
   type AttentionItem,
 } from '@/components/WorkflowState';
 
-const PORTFOLIO = [
-  { key: 'systems', label: 'Systems', domain: 'revenue' },
-  { key: 'media', label: 'Media', domain: 'media' },
-  { key: 'gstar', label: 'G-Star', domain: 'media' },
-  { key: 'assets', label: 'Assets', domain: null },
-  { key: 'frontier', label: 'Frontier', domain: null },
-] as const;
-
 /**
- * Command Center (Holding Overview) — OL scoreboard + portfolio health.
+ * Command Center — Attention → Act → Outcomes.
  * HARD RULE: no mock KPI generators; empty API → empty state.
+ * Phase 1 (UX-R1): collapse ornamental metric grids; one compact rollup only.
  */
 export default function HoldingOverview() {
   const { tenantId } = useTenant();
@@ -71,21 +65,6 @@ export default function HoldingOverview() {
     };
   }, [tenantId, tick]);
 
-  const health = useMemo(() => {
-    const byStatus = (s: string) => missions.filter((m) => m.status === s).length;
-    const awaiting = approvals.length;
-    const failedMissions = byStatus('failed');
-    const failedExe = executions.filter((e) => e.status === 'failed' || e.status === 'denied').length;
-    return {
-      active: byStatus('active') + byStatus('running'),
-      completed: byStatus('completed'),
-      failed: failedMissions,
-      paused: byStatus('paused'),
-      awaiting,
-      failedExe,
-    };
-  }, [missions, approvals, executions]);
-
   const attentionItems = useMemo((): AttentionItem[] => {
     const items: AttentionItem[] = [];
     for (const a of approvals) {
@@ -93,9 +72,10 @@ export default function HoldingOverview() {
         id: `approval-${a.approvalId}`,
         kind: 'approval',
         label: (a.reason && a.reason.trim()) || a.approvalId,
-        detail: [a.riskLevel ? `risk ${a.riskLevel}` : null, a.missionId]
-          .filter(Boolean)
-          .join(' · ') || undefined,
+        detail:
+          [a.riskLevel ? `risk ${a.riskLevel}` : null, a.missionId]
+            .filter(Boolean)
+            .join(' · ') || undefined,
         to: a.missionId
           ? `/missions/${a.missionId}`
           : a.executionId
@@ -114,7 +94,9 @@ export default function HoldingOverview() {
         to: `/missions/${m.missionId}`,
       });
     }
-    for (const e of executions.filter((x) => x.status === 'failed' || x.status === 'denied').slice(0, 8)) {
+    for (const e of executions
+      .filter((x) => x.status === 'failed' || x.status === 'denied')
+      .slice(0, 8)) {
       items.push({
         id: `exe-fail-${e.executionId}`,
         kind: 'failure',
@@ -129,31 +111,17 @@ export default function HoldingOverview() {
     ].slice(0, 12);
   }, [approvals, missions, executions]);
 
-  const domainsPresent = useMemo(() => {
-    const set = new Set(executions.map((e) => e.domain).filter(Boolean) as string[]);
-    return set;
-  }, [executions]);
+  const activeMissions = useMemo(
+    () =>
+      missions.filter(
+        (m) => m.status === 'active' || m.status === 'running' || m.status === 'paused',
+      ),
+    [missions],
+  );
 
-  const firstMission = missions[0]?.missionId;
-  const avgLatency =
-    economics && economics.totalExecutions > 0
-      ? Math.round(economics.totalDurationMs / economics.totalExecutions)
-      : null;
   const successRate =
     economics && economics.totalExecutions > 0
       ? `${((economics.successCount / economics.totalExecutions) * 100).toFixed(1)}%`
-      : null;
-  const interventionRate =
-    economics && economics.totalExecutions > 0
-      ? `${((economics.humanInterventions / economics.totalExecutions) * 100).toFixed(1)}%`
-      : null;
-  const costPerMission =
-    economics && missions.length > 0
-      ? (economics.totalCostUnits / missions.length).toFixed(1)
-      : null;
-  const evPerExe =
-    economics && economics.totalExecutions > 0
-      ? (economics.attributedEconomicValue / economics.totalExecutions).toFixed(2)
       : null;
 
   return (
@@ -161,7 +129,7 @@ export default function HoldingOverview() {
       onOpenApprovals={() => setPanelOpen(true)}
       pendingCount={approvals.length}
     >
-      <section className="relative mb-10 animate-fade-up">
+      <section className="relative mb-8 animate-fade-up">
         <div className="pointer-events-none absolute -inset-x-4 -top-6 h-40 ops-grid opacity-30" />
         <p className="text-[0.7rem] uppercase tracking-[0.22em] text-muted-foreground">
           UX-001 · Command Center
@@ -169,202 +137,84 @@ export default function HoldingOverview() {
         <h1 className="mt-2 font-display text-5xl md:text-6xl font-semibold tracking-tight text-foreground">
           AION
         </h1>
-        <p className="mt-3 max-w-xl text-sm md:text-base text-muted-foreground">
-          Holding view of the machine workforce. Metrics resolve from Runtime
-          economics — never invented dashboard state. Current phase:{' '}
-          <strong className="font-medium text-foreground">OL-001 production</strong>
-          {' '}— Console launches still default to PRE-OL; use explicit{' '}
-          <strong className="font-medium text-foreground">OL-001 Production</strong>{' '}
-          mode for scoreboard credit. Cohort heartbeat:{' '}
+        <p className="mt-3 max-w-lg text-sm text-muted-foreground">
+          What needs your decision? Approvals and failures first — then act.
+          Cohort pulse lives on the{' '}
           <Link className="text-primary underline-offset-2 hover:underline" to="/ol001">
             OL-001 scoreboard
-          </Link>
-          . Operate from{' '}
-          <Link className="text-primary underline-offset-2 hover:underline" to="/missions">
-            Mission Control
-          </Link>{' '}
-          or{' '}
-          <Link className="text-primary underline-offset-2 hover:underline" to="/missions/new">
-            New Mission
           </Link>
           .
         </p>
         {loading && <LoadState label="Loading canonical truth…" />}
-        {error && (
-          <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />
-        )}
+        {error && <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} />}
       </section>
 
+      {/* 1. Attention */}
       <AttentionRail items={attentionItems} loading={loading && !error} />
 
+      {/* 2. Act */}
       <section className="mb-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
         <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Operating leverage (tenant aggregate — includes PRE-OL)
+          Act
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-          <MetricLink label="Throughput (missions)" value={missions.length} to="/missions" />
-          <MetricLink label="Success rate" value={successRate} tone="ok" />
-          <MetricLink label="Human intervention rate" value={interventionRate} />
-          <MetricLink label="Cost / mission" value={costPerMission} />
-          <MetricLink label="EV / execution" value={evPerExe} />
-          <MetricLink label="EV / cost (ROI)" value={economics?.roi ?? null} />
-        </div>
-      </section>
-      <section className="mb-10 animate-fade-up" style={{ animationDelay: '60ms' }}>
-        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Portfolio
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          {PORTFOLIO.map((p) => {
-            const live = p.domain ? domainsPresent.has(p.domain) : false;
-            const count = p.domain
-              ? executions.filter((e) => e.domain === p.domain).length
-              : null;
-            return (
-              <div
-                key={p.key}
-                className="rounded-md border border-border/70 bg-card/40 px-3 py-3"
-              >
-                <div className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
-                  {p.label}
-                </div>
-                {p.domain === null ? (
-                  <p className="mt-2 text-xs text-muted-foreground">Stub — no data domain yet</p>
-                ) : live ? (
-                  <Link
-                    to="/missions"
-                    className="mt-2 block font-mono text-lg text-foreground hover:text-primary"
-                  >
-                    {count}
-                    <span className="ml-2 text-[0.65rem] uppercase text-ok">live</span>
-                  </Link>
-                ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">No executions for domain</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="mb-10 animate-fade-up" style={{ animationDelay: '120ms' }}>
-        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Mission health
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          <MetricLink label="Active" value={health.active} to="/missions?status=active" />
-          <MetricLink label="Completed" value={health.completed} to="/missions?status=completed" tone="ok" />
-          <MetricLink label="Failed" value={health.failed} to="/missions?status=failed" tone="danger" />
-          <MetricLink label="Paused" value={health.paused} to="/missions?status=paused" />
-          <button
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm">
+            <Link to="/missions/new">Launch mission</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/missions?status=active">Open active missions</Link>
+          </Button>
+          <Button
             type="button"
-            className="block text-left rounded-md border border-border/80 bg-card/60 px-3.5 py-3 transition-colors hover:border-primary/50 hover:bg-accent/40"
+            size="sm"
+            variant="outline"
+            disabled={approvals.length === 0}
             onClick={() => setPanelOpen(true)}
           >
-            <div className="text-[0.65rem] uppercase tracking-[0.16em] text-muted-foreground">
-              Awaiting approval
-            </div>
-            <div className="mt-1 font-display text-2xl tabular-nums tracking-tight text-warn">
-              {health.awaiting}
-            </div>
-          </button>
+            Decide approvals{approvals.length > 0 ? ` (${approvals.length})` : ''}
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link to="/implementations">IE-001 cases</Link>
+          </Button>
         </div>
       </section>
 
-      <section className="mb-10 animate-fade-up" style={{ animationDelay: '180ms' }}>
+      {/* Compact holding rollup — drill-through only, no duplicate grids */}
+      <section className="mb-10 animate-fade-up" style={{ animationDelay: '80ms' }}>
         <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Workforce
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          <MetricLink
-            label="Executions"
-            value={economics?.totalExecutions}
-            to={executions[0] ? `/executions/${executions[0].executionId}` : undefined}
-          />
-          <MetricLink label="Success rate" value={successRate} tone="ok" />
-          <MetricLink
-            label="Human interventions"
-            value={economics?.humanInterventions}
-            hint="from economics rollup"
-          />
-          <MetricLink
-            label="Policy denials"
-            value={economics?.policyDenials}
-            tone="danger"
-            to={
-              executions.find((e) => e.status === 'denied')
-                ? `/executions/${executions.find((e) => e.status === 'denied')!.executionId}`
-                : undefined
-            }
-          />
-          <MetricLink label="Avg latency (ms)" value={avgLatency} hint="duration / executions" />
-        </div>
-      </section>
-
-      <section className="mb-10 animate-fade-up" style={{ animationDelay: '240ms' }}>
-        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Economics
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-          <MetricLink
-            label="Execution cost"
-            value={economics?.totalCostUnits}
-            to={firstMission ? `/missions/${firstMission}` : undefined}
-            hint="holding rollup units"
-          />
-          <MetricLink
-            label="Mission cost"
-            value={economics?.totalCostUnits}
-            to={firstMission ? `/missions/${firstMission}` : undefined}
-            hint="same holding cost in MVP"
-          />
-          <MetricLink label="Attributed value" value={economics?.attributedEconomicValue} tone="ok" />
-          <MetricLink label="EV / Cost (ROI)" value={economics?.roi ?? null} />
-          <MetricLink
-            label="Revenue influenced"
-            value={economics?.attributedEconomicValue}
-            hint="attributed EV from API"
-          />
-        </div>
-      </section>
-
-      <section className="mb-10 animate-fade-up" style={{ animationDelay: '300ms' }}>
-        <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground mb-3">
-          Risk
+          Holding rollup
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <MetricLink label="Missions" value={missions.length} to="/missions" />
           <MetricLink
-            label="R2 / R3 executions"
-            value={
-              executions.filter((e) => e.riskLevel === 'R2' || e.riskLevel === 'R3').length
-            }
+            label="Active"
+            value={activeMissions.length}
+            to="/missions?status=active"
           />
+          <MetricLink label="Success rate" value={successRate} tone="ok" to="/ol001" />
           <MetricLink
             label="Pending approvals"
             value={approvals.length}
             tone="warn"
           />
-          <MetricLink
-            label="Failed executions"
-            value={health.failedExe}
-            tone="danger"
-            to={
-              executions.find((e) => e.status === 'failed' || e.status === 'denied')
-                ? `/executions/${
-                    executions.find((e) => e.status === 'failed' || e.status === 'denied')!
-                      .executionId
-                  }`
-                : undefined
-            }
-          />
-          {/* Budget overruns omitted — field not present on economics rollup */}
         </div>
+        <p className="mt-2 text-[0.7rem] text-muted-foreground">
+          Full economics and cohort KPIs:{' '}
+          <Link className="text-primary underline-offset-2 hover:underline" to="/ol001">
+            OL-001
+          </Link>
+          {' · '}
+          <Link className="text-primary underline-offset-2 hover:underline" to="/missions">
+            Mission Control
+          </Link>
+        </p>
       </section>
 
-      <section className="animate-fade-up" style={{ animationDelay: '360ms' }}>
+      {/* 3. Outcomes — mission list */}
+      <section className="animate-fade-up" style={{ animationDelay: '120ms' }}>
         <div className="flex items-end justify-between mb-3">
           <h2 className="font-display text-sm uppercase tracking-[0.18em] text-muted-foreground">
-            Missions
+            Outcomes · recent missions
           </h2>
           <Link
             to="/missions"

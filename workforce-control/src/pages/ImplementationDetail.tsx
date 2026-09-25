@@ -5,6 +5,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi, RuntimeHttpError } from '@/lib/runtime-api';
 import type { ImplementationCase } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { ErrorState, LoadState } from '@/components/WorkflowState';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -331,7 +332,7 @@ export default function ImplementationDetail() {
   if (loading) {
     return (
       <Shell>
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadState label="Loading implementation case…" />
       </Shell>
     );
   }
@@ -339,7 +340,7 @@ export default function ImplementationDetail() {
   if (!c) {
     return (
       <Shell>
-        <p className="text-sm text-destructive font-mono">{error ?? 'Not found'}</p>
+        <ErrorState message={error ?? 'Case not found for this tenant'} />
         <Button asChild variant="outline" className="mt-4">
           <Link to="/implementations">Back</Link>
         </Button>
@@ -389,7 +390,7 @@ export default function ImplementationDetail() {
             blockers: {c.blockers!.join(', ')}
           </p>
         )}
-        {error && <p className="text-sm text-destructive font-mono">{error}</p>}
+        {error && <ErrorState message={error} className="mb-2" />}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">

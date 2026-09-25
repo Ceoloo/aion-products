@@ -4,6 +4,7 @@ import { Shell } from '@/components/Shell';
 import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi, RuntimeHttpError } from '@/lib/runtime-api';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/WorkflowState';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -114,7 +115,7 @@ export default function NewImplementation() {
           </Select>
         </div>
 
-        {error && <p className="text-sm text-destructive font-mono">{error}</p>}
+        {error && <ErrorState message={error} />}
 
         <div className="flex gap-2">
           <Button type="submit" disabled={submitting}>

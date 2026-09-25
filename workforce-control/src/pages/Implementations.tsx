@@ -6,15 +6,18 @@ import { useTenant } from '@/hooks/useTenant';
 import { RuntimeApi } from '@/lib/runtime-api';
 import type { ImplementationCase } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { EmptyState, ErrorState, LoadState } from '@/components/WorkflowState';
 
 /**
  * IE-001 — Implementation case list (tenant-scoped via Runtime).
+ * Phase 1 (UX-R3): shared Load / Error / Empty states.
  */
 export default function Implementations() {
   const { tenantId } = useTenant();
   const [cases, setCases] = useState<ImplementationCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +29,7 @@ export default function Implementations() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
+          setCases([]);
           setError(err instanceof Error ? err.message : 'Failed to load cases');
         }
       })
@@ -35,7 +39,14 @@ export default function Implementations() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId]);
+  }, [tenantId, tick]);
+
+  const attentionCases = cases.filter(
+    (c) =>
+      (c.blockers?.length ?? 0) > 0 ||
+      c.deliveryStatus === 'on_hold' ||
+      Boolean(c.nextAction),
+  );
 
   return (
     <Shell>
@@ -58,16 +69,48 @@ export default function Implementations() {
         </Button>
       </div>
 
+      {loading && <LoadState label="Loading implementation cases…" />}
       {error && (
-        <p className="text-sm text-destructive mb-4 font-mono">{error}</p>
+        <ErrorState message={error} onRetry={() => setTick((t) => t + 1)} className="mb-4" />
       )}
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : cases.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No implementation cases for this tenant yet.
-        </p>
-      ) : (
+
+      {!loading && !error && attentionCases.length > 0 && (
+        <section className="mb-6" aria-label="Needs attention">
+          <h2 className="font-display text-sm uppercase tracking-[0.18em] text-warn mb-2">
+            Needs attention
+          </h2>
+          <ul className="divide-y divide-border/70 overflow-hidden rounded-md border border-warn/35 bg-warn/5">
+            {attentionCases.slice(0, 8).map((c) => (
+              <li key={`attn-${c.caseId}`}>
+                <Link
+                  to={`/implementations/${c.caseId}`}
+                  className="flex flex-col gap-1 px-3 py-2.5 hover:bg-accent/30 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{c.clientName}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {c.nextAction ??
+                        ((c.blockers?.length ?? 0) > 0
+                          ? `blockers: ${c.blockers!.join(', ')}`
+                          : c.deliveryStatus)}
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs shrink-0">{c.deliveryStatus}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {!loading && !error && cases.length === 0 ? (
+        <EmptyState
+          title="No implementation cases yet"
+          detail="Create a commercial handoff case to start IE-001 intake."
+          actionTo="/implementations/new"
+          actionLabel="New case"
+        />
+      ) : !loading && !error ? (
         <ul className="divide-y divide-border/80 border border-border/60 rounded-md">
           {cases.map((c) => (
             <li key={c.caseId}>
@@ -100,7 +143,7 @@ export default function Implementations() {
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
     </Shell>
   );
 }
