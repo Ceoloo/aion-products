@@ -1,4 +1,4 @@
-import { ArrowRight, Crosshair, Headphones, Mic, Rocket, Sparkles } from 'lucide-react';
+import { ArrowRight, Crosshair, Headphones, Mic, Radar, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /** Standby view when Cockpit tab is open but no live engagement exists. */
@@ -33,7 +33,7 @@ export function CockpitStandby({ onLaunch }: { onLaunch: () => void }) {
           <div className="mt-10 grid w-full max-w-lg gap-2 text-left sm:grid-cols-3">
             {[
               { Icon: Mic, t: 'Talk or paste', d: 'Turns stream in live' },
-              { Icon: Sparkles, t: 'Atlas rail', d: 'Next move + deal radar' },
+              { Icon: Radar, t: 'Atlas rail', d: 'Next move + deal radar' },
               { Icon: ArrowRight, t: 'Advance', d: 'Push the ladder forward' },
             ].map(({ Icon, t, d }) => (
               <div key={t} className="panel-inset px-3 py-3">
@@ -77,8 +77,8 @@ export function DebriefStandby({
   return (
     <div className="room-enter mx-auto max-w-3xl">
       <section className="panel overflow-hidden">
-        <div className="atlas-glow border-b border-border/60 px-6 py-8 md:px-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Debrief</p>
+        <div className="border-b border-border/60 px-6 py-8 md:px-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Debrief</p>
           <h1 className="mt-2 font-display text-3xl font-bold">Truth lock · pipeline move</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
             After a call, spend 30–60 seconds confirming what actually happened — upstream advances, downstream
