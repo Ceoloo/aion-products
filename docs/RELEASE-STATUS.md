@@ -8,8 +8,8 @@
 | Revenue isolated preview | https://aion-revenue-copilot-7b31cmnel-loos-projects-84839afe.vercel.app | dd65adf, READY, sample mode, Vercel access protection may require a share link. |
 | Operator Console | Vercel `v0-aion-ops-command-center` | No deployment or production domain in project inventory. |
 | Growth Command Center | Vercel `v0-growth-command-center` | No deployment; source/release mapping not established. |
-| Runtime | https://runtime.aionsystems.ai | Cannot verify: requests from this environment return proxy 502 connection refused. This does not establish global outage. |
-| Copilot backend | https://copilot.aionsystems.ai | Cannot verify from this environment (502). |
+| Runtime | https://runtime.srv1655818.hstgr.cloud | *Corrected 2026-09-25:* this row originally listed a domain AION does not own, which explains the proxy 502 observed from this environment on 2026-09-09. The production Runtime is the Hostinger host shown here. |
+| Copilot backend | https://copilot.runtime.srv1655818.hstgr.cloud | *Corrected 2026-09-25:* originally listed a domain AION does not own (the 502 observed on 2026-09-09). |
 
 ## Verified code
 

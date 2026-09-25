@@ -129,7 +129,7 @@ Vercel `NOT_FOUND`).
 Do **not** deploy this Console against a stub Runtime.
 
 1. Complete [OPS-001](https://github.com/Ceoloo/aion-docs/blob/cursor/execution-object-agent-identity-6743/roadmap/ops-001-live-runtime.md) —
-   live Runtime behind Traefik with health green (Hostinger Runtime is the current production endpoint until `runtime.aionsystems.ai` DNS is cut over).
+   live Runtime behind Traefik with health green (production endpoint: `https://runtime.srv1655818.hstgr.cloud`, the Hostinger hostname AION keeps by decision 2026-09-25; a recovered server changes it — see aion-infra `docs/recovery-kit.md`, "Runtime hostname change").
 2. Vercel project `aion-operator-console` Root Directory = `workforce-control`.
 3. Build-time env: only `VITE_AION_TENANT_ID` (default tenant hint, e.g.
    `aion-systems` — **not authority**). Leave `VITE_AION_RUNTIME_URL` unset in
