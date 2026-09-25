@@ -10,7 +10,6 @@ import {
 import { DISPOSITIONS, DOWNSTREAM, OUTCOMES, pct, titleCase } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,18 +21,28 @@ export function ControlRoom({ onNewCall }: { onNewCall: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<SessionRecordDetail | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
 
-  const load = () =>
-    AionApi.dashboard()
-      .then((d) => {
-        setM(d.metrics);
-        setRecords(d.records);
-      })
-      .catch(() => {});
+  const load = async () => {
+    setLoading(true);
+    setLoadErr(null);
+    try {
+      const d = await AionApi.dashboard();
+      setM(d.metrics);
+      setRecords(d.records);
+    } catch (e) {
+      setM(null);
+      setRecords([]);
+      setLoadErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   const openRecord = async (id: string) => {
@@ -92,7 +101,7 @@ export function ControlRoom({ onNewCall }: { onNewCall: () => void }) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={load}>
+          <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
             <RotateCcw className="mr-1.5 h-4 w-4" /> Refresh
           </Button>
           <Button size="sm" onClick={onNewCall}>
@@ -101,36 +110,68 @@ export function ControlRoom({ onNewCall }: { onNewCall: () => void }) {
         </div>
       </div>
 
-      {err && <p className="text-sm text-destructive">{err}</p>}
+      {loading && (
+        <p className="text-sm text-muted-foreground" role="status">
+          Loading mission command…
+        </p>
+      )}
 
-      {m && (
-        <>
+      {loadErr && (
+        <div
+          className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          role="alert"
+        >
+          <p className="font-medium">Could not load control room</p>
+          <p className="mt-0.5 text-destructive/90">{loadErr}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-2 border-destructive/40"
+            onClick={() => void load()}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {err && <p className="text-sm text-destructive" role="alert">{err}</p>}
+
+      {!loading && !loadErr && m && (
+        <section className="space-y-3" aria-label="Needs attention">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-warn">
+            Needs attention
+          </h2>
+          <AttentionList metrics={m} records={records} onOpen={openRecord} />
+        </section>
+      )}
+
+      {!loading && !loadErr && m && (
+        <section className="space-y-3">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Gate rollup
+          </h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-            <MetricCard label="Samples (excluded)" value={String(m.syntheticSessions ?? 0)} sub="Not production evidence" />
             <GateCard label="Real conversations" g={m.realCalls} />
+            <GateCard label="Ladder advances" g={m.conversionAdvances} />
+            <GateCard label="Downstream wins" g={m.downstreamConversions} />
+            <MetricCard
+              label="Sessions / dials"
+              value={`${m.totalSessions} / ${m.totalDials}`}
+              good={m.gatesMet}
+              sub={m.gatesMet ? 'All gates green' : 'Gates in progress'}
+            />
             <AccCard label="Fact accuracy" v={m.factAccuracy} target={0.85} />
             <AccCard label="Objection accuracy" v={m.objectionAccuracy} target={0.85} />
             <AccCard label="Useful interventions" v={m.usefulInterventionRate} target={0.6} />
-            <GateCard label="Ladder advances" g={m.conversionAdvances} />
-            <GateCard label="Downstream wins" g={m.downstreamConversions} />
             <AccCard label="Lineage complete" v={m.lineageCompleteness} target={1} />
-            <MetricCard label="Sessions / dials" value={`${m.totalSessions} / ${m.totalDials}`} good={m.gatesMet} sub={m.gatesMet ? 'All gates green' : 'Gates in progress'} />
+            <MetricCard
+              label="Samples (excluded)"
+              value={String(m.syntheticSessions ?? 0)}
+              sub="Not production evidence"
+            />
           </div>
-
-          <div className="panel p-4">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Failure modes (still valuable)
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(m.dispositions).map(([k, v]) => (
-                <Badge key={k} variant="secondary">{titleCase(k)}: {v}</Badge>
-              ))}
-              {Object.keys(m.dispositions).length === 0 && (
-                <span className="text-sm text-muted-foreground">No dispositions yet — run engagements.</span>
-              )}
-            </div>
-          </div>
-        </>
+        </section>
       )}
 
       <section className="panel overflow-hidden">
@@ -360,6 +401,100 @@ function Meta({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function AttentionList({
+  metrics,
+  records,
+  onOpen,
+}: {
+  metrics: DashboardMetrics;
+  records: DashboardRecord[];
+  onOpen: (id: string) => void;
+}) {
+  const unmetGates: Array<{ label: string; detail: string }> = [];
+  const pushGate = (label: string, g: GateStatus) => {
+    if (!g.met) unmetGates.push({ label, detail: `${g.value} / ${g.target}` });
+  };
+  pushGate('Real conversations', metrics.realCalls);
+  pushGate('Ladder advances', metrics.conversionAdvances);
+  pushGate('Downstream wins', metrics.downstreamConversions);
+  if (metrics.factAccuracy != null && metrics.factAccuracy < 0.85) {
+    unmetGates.push({ label: 'Fact accuracy', detail: pct(metrics.factAccuracy) });
+  }
+  if (metrics.objectionAccuracy != null && metrics.objectionAccuracy < 0.85) {
+    unmetGates.push({ label: 'Objection accuracy', detail: pct(metrics.objectionAccuracy) });
+  }
+  if (metrics.usefulInterventionRate != null && metrics.usefulInterventionRate < 0.6) {
+    unmetGates.push({ label: 'Useful interventions', detail: pct(metrics.usefulInterventionRate) });
+  }
+  if (metrics.lineageCompleteness != null && metrics.lineageCompleteness < 1) {
+    unmetGates.push({ label: 'Lineage complete', detail: pct(metrics.lineageCompleteness) });
+  }
+
+  const needsReview = records.filter(
+    (r) => !r.synthetic && (!r.finalized || !r.evaluable || !r.outcome),
+  );
+  const failedish = records.filter(
+    (r) =>
+      !r.synthetic &&
+      (r.disposition === 'no_show' ||
+        r.disposition === 'disqualified' ||
+        r.outcome === 'lost' ||
+        r.outcome === 'no_opportunity'),
+  );
+
+  if (unmetGates.length === 0 && needsReview.length === 0 && failedish.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Nothing queued — gates met or no production sessions yet. Launch an engagement to generate evidence.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-warn/35 bg-warn/5">
+      {unmetGates.map((g) => (
+        <li key={g.label} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+          <div>
+            <div className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">gate</div>
+            <div className="font-medium">{g.label}</div>
+          </div>
+          <span className="font-mono text-xs text-warn">{g.detail}</span>
+        </li>
+      ))}
+      {needsReview.slice(0, 6).map((r) => (
+        <li key={`rev-${r.sessionId}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+          <div className="min-w-0">
+            <div className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">review</div>
+            <div className="truncate font-medium">{r.prospect}</div>
+            <div className="truncate font-mono text-[0.65rem] text-muted-foreground">
+              {!r.finalized ? 'not finalized' : !r.evaluable ? 'not evaluable' : 'missing outcome'}
+            </div>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={() => onOpen(r.sessionId)}>
+            Inspect
+          </Button>
+        </li>
+      ))}
+      {failedish.slice(0, 4).map((r) => (
+        <li key={`fail-${r.sessionId}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+          <div className="min-w-0">
+            <div className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">outcome</div>
+            <div className="truncate font-medium">{r.prospect}</div>
+            <div className="truncate font-mono text-[0.65rem] text-muted-foreground">
+              {titleCase(r.disposition)}
+              {r.outcome ? ` · ${titleCase(r.outcome)}` : ''}
+            </div>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={() => onOpen(r.sessionId)}>
+            Inspect
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 
 function MetricCard({ label, value, good, sub }: { label: string; value: string; good?: boolean; sub?: string }) {
   return (
