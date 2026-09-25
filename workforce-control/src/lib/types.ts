@@ -35,6 +35,17 @@ export interface Mission {
   createdAt: string;
 }
 
+/** Full durable agent grant returned by Runtime for operator mission launch. */
+export interface RegisteredAgent {
+  actorId: string;
+  actorType: 'agent';
+  name: string;
+  tenantId?: string;
+  permissions: string[];
+  maxRiskLevel?: string;
+  [key: string]: unknown;
+}
+
 export interface ExecutionObject {
   executionId: string;
   actorId?: string;

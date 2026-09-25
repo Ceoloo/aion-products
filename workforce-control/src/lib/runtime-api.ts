@@ -18,6 +18,7 @@ import type {
   ImplementationCase,
   Mission,
   OutcomeRecord,
+  RegisteredAgent,
 } from './types';
 
 const DIRECT_RUNTIME_URL = (import.meta.env.VITE_AION_RUNTIME_URL as string | undefined)?.replace(/\/$/, '');
@@ -39,6 +40,7 @@ async function request<T>(
   path: string,
   tenantId: string,
   init?: RequestInit,
+  acceptGovernedDenial = false,
 ): Promise<T> {
   const base = RUNTIME_URL || '';
   const res = await fetch(`${base}${path}`, {
@@ -61,7 +63,8 @@ async function request<T>(
   if (!text && res.ok) {
     throw new RuntimeHttpError(res.status, 'empty_response', 'Runtime returned an empty response. Check the Runtime connection.');
   }
-  if (!res.ok) {
+  if (!res.ok && !(acceptGovernedDenial && res.status === 403 &&
+    body && typeof body === 'object' && (body as { status?: string }).status === 'denied')) {
     const err = (body && typeof body === 'object' ? body : {}) as { error?: string; message?: string };
     if (!DIRECT_RUNTIME_URL && res.status === 401 && err.error === 'not_authenticated') {
       window.dispatchEvent(new Event('aion:session-expired'));
@@ -88,6 +91,10 @@ export const RuntimeApi = {
 
   listMissions(tenantId: string) {
     return request<{ missions: Mission[] }>('/v1/missions', tenantId);
+  },
+
+  listAgents(tenantId: string) {
+    return request<{ agents: RegisteredAgent[]; count: number }>('/v1/actors', tenantId);
   },
 
   getMission(tenantId: string, missionId: string) {
@@ -174,10 +181,11 @@ export const RuntimeApi = {
       run: unknown;
       execution: ExecutionObject | null;
       decision: unknown;
+      continuation?: { status: string; stoppedAtStep?: number | null; error?: string };
     }>(`/v1/approvals/${encodeURIComponent(approvalId)}/decision`, tenantId, {
       method: 'POST',
       body: JSON.stringify(body),
-    });
+    }, true);
   },
 
   /**
@@ -376,6 +384,7 @@ export const RuntimeApi = {
       missionId?: string;
       status?: 'pending' | 'realized' | 'failed' | 'unknown';
       outcomeType?: string;
+      externalReference?: string;
       value?: number;
       currency?: string;
       measuredAt?: string;

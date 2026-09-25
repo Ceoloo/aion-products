@@ -29,6 +29,7 @@ export default function MissionDetail() {
   const [closeError, setCloseError] = useState<string | null>(null);
   const [outcomeSummary, setOutcomeSummary] = useState('');
   const [businessValue, setBusinessValue] = useState('');
+  const [valueEvidence, setValueEvidence] = useState('');
   const [waivedStep, setWaivedStep] = useState('');
   const [waiverReason, setWaiverReason] = useState('');
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -92,6 +93,15 @@ export default function MissionDetail() {
     [executions],
   );
 
+  const retryCount = useMemo(() => {
+    const attempts = new Map<number, number>();
+    for (const execution of executions) {
+      const index = execution.metadata?.missionStepIndex;
+      if (typeof index === 'number') attempts.set(index, (attempts.get(index) ?? 0) + 1);
+    }
+    return [...attempts.values()].reduce((total, count) => total + Math.max(0, count - 1), 0);
+  }, [executions]);
+
   const lineageRoots = useMemo(() => {
     const roots = new Map<string, ExecutionObject[]>();
     for (const e of executions) {
@@ -137,6 +147,24 @@ export default function MissionDetail() {
       setCloseError('Business value must be a number ≥ 0 (USD). Enter 0 if none was realized.');
       return;
     }
+    if (approvals.length > 0 || executions.some((e) => e.status === 'awaiting_approval')) {
+      setCloseError('A governed action is still awaiting a human decision.');
+      return;
+    }
+    const expectedSteps = Number(mission.metadata?.automatedStepCount);
+    if (mode === 'completed' && Number.isFinite(expectedSteps) && expectedSteps > 0 &&
+        (economics?.successCount ?? 0) < expectedSteps) {
+      setCloseError(`The workflow has completed ${economics?.successCount ?? 0} of ${expectedSteps} automated steps.`);
+      return;
+    }
+    if (mode === 'completed' && executions.some((e) => e.status === 'failed' || e.status === 'denied')) {
+      setCloseError('This mission has a failed or denied step. Use an exception close with a documented waiver.');
+      return;
+    }
+    if (value > 0 && !valueEvidence.trim()) {
+      setCloseError('Add the CRM record or other evidence supporting a positive business value.');
+      return;
+    }
     if (mode === 'completed_with_exception' && (!exceptionStep || !exceptionReason)) {
       setCloseError('An exception close needs the waived step and the exact reason.');
       return;
@@ -180,11 +208,13 @@ export default function MissionDetail() {
         missionId: mission.missionId,
         status: 'realized',
         outcomeType: 'mission.terminal',
+        ...(valueEvidence.trim() ? { externalReference: valueEvidence.trim() } : {}),
         value,
         currency: 'USD',
         measuredAt: closedAt,
         metadata: {
           summary,
+          ...(valueEvidence.trim() ? { valueEvidence: valueEvidence.trim() } : {}),
           closeMode: mode,
           closedFrom: 'operator-console',
           ...(mode === 'completed_with_exception'
@@ -203,8 +233,12 @@ export default function MissionDetail() {
             summary,
             outcomeId: outcome.outcomeId,
             businessValue: value,
+            ...(valueEvidence.trim() ? { valueEvidence: valueEvidence.trim() } : {}),
             currency: 'USD',
             humanInterventions: econ?.humanInterventions ?? 0,
+            failureCount: econ?.failureCount ?? 0,
+            retryCount,
+            executionDurationMs: econ?.totalDurationMs ?? 0,
             approvals: econ?.approvals ?? 0,
             executions: econ?.totalExecutions ?? executions.length,
             executionCostUnits: econ?.totalCostUnits ?? 0,
@@ -314,6 +348,15 @@ export default function MissionDetail() {
               />
             </label>
             <label className="block text-xs text-muted-foreground">
+              Value evidence / CRM record (required when value is positive)
+              <input
+                className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                value={valueEvidence}
+                onChange={(e) => setValueEvidence(e.target.value)}
+                placeholder="GHL opportunity ID, invoice, or evidence URL"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
               Waived step (exception close only)
               <input
                 className="mt-1 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs"
@@ -372,6 +415,10 @@ export default function MissionDetail() {
                 ['humanInterventions', typeof terminalOutcome.humanInterventions === 'number'
                   ? terminalOutcome.humanInterventions
                   : undefined],
+                ['failureCount', terminalOutcome.failureCount],
+                ['retryCount', terminalOutcome.retryCount],
+                ['executionDurationMs', terminalOutcome.executionDurationMs],
+                ['valueEvidence', terminalOutcome.valueEvidence],
                 ['approvals', terminalOutcome.approvals],
                 ['executions', terminalOutcome.executions],
                 ['executionCostUnits', terminalOutcome.executionCostUnits],
@@ -477,11 +524,13 @@ export default function MissionDetail() {
               to={failed[0] ? `/executions/${failed[0].executionId}` : undefined}
             />
             <MetricLink label="Attributed EV" value={economics.attributedEconomicValue} tone="ok" />
-            <MetricLink label="ROI" value={economics.roi} />
+            <MetricLink label="Value / cost unit" value={economics.roi} />
             <MetricLink label="Executions" value={economics.totalExecutions} />
             <MetricLink label="Successes" value={economics.successCount} tone="ok" />
             <MetricLink label="Approvals" value={economics.approvals} tone="warn" />
             <MetricLink label="Interventions" value={economics.humanInterventions} />
+            <MetricLink label="Execution time (ms)" value={economics.totalDurationMs} />
+            <MetricLink label="Retries" value={retryCount} />
           </div>
         )}
       </section>
@@ -588,4 +637,3 @@ export default function MissionDetail() {
     </Shell>
   );
 }
-

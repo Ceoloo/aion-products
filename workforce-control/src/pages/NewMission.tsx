@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shell } from '@/components/Shell';
 import { useTenant } from '@/hooks/useTenant';
 import { COHORT_OL001, COHORT_PRE_OL } from '@/lib/cohort';
 import { RuntimeApi, RuntimeHttpError } from '@/lib/runtime-api';
+import type { RegisteredAgent } from '@/lib/types';
 import {
   LEAD_TO_APPOINTMENT_V1,
   REVENUE_PRODUCTION_V1,
@@ -20,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-/** Example Client / Sample — live GHL fixture on AION Empire (same IDs as M001). */
+/** Fixture values are available only for PRE-OL validation. */
 export const SAMPLE_CLIENT_M001 = {
   clientName: 'Example Client',
   leadName: 'Sample Lead',
@@ -59,29 +60,72 @@ export default function NewMission() {
   const [workflowId, setWorkflowId] = useState(REVENUE_PRODUCTION_V1.id);
   const [budget, setBudget] = useState('10');
   const [leadEmail, setLeadEmail] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [leadName, setLeadName] = useState('');
+  const [contactId, setContactId] = useState('');
+  const [opportunityId, setOpportunityId] = useState('');
+  const [pipelineId, setPipelineId] = useState('');
+  const [stageId, setStageId] = useState('');
+  const [registeredAgents, setRegisteredAgents] = useState<RegisteredAgent[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [agentsError, setAgentsError] = useState<string | null>(null);
   const [missionName, setMissionName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isProduction = launchMode === 'ol001_production';
 
+  useEffect(() => {
+    let cancelled = false;
+    RuntimeApi.listAgents(tenantId)
+      .then(({ agents }) => { if (!cancelled) setRegisteredAgents(agents); })
+      .catch((err: unknown) => {
+        if (!cancelled) setAgentsError(err instanceof Error ? err.message : 'Could not load agents');
+      });
+    return () => { cancelled = true; };
+  }, [tenantId]);
+
   const template = useMemo(
     () => WORKFLOW_TEMPLATES.find((t) => t.id === workflowId) ?? REVENUE_PRODUCTION_V1,
     [workflowId],
   );
+  const automatedSteps = useMemo(() => {
+    const configured = template.steps.filter((step) => !step.humanOperated);
+    return isProduction && template.id === LEAD_TO_APPOINTMENT_V1.id
+      ? [
+          { name: 'contact-read', capability: 'crm.contact.read', riskLevel: 'R1' as const,
+            description: 'Read the real GHL contact before proposing the opportunity action' },
+          ...configured.filter((step) => step.name !== 'research' && step.name !== 'enrich'),
+        ]
+      : configured;
+  }, [template, isProduction]);
+  const eligibleAgents = useMemo(() => {
+    const capabilities = automatedSteps.map((step) =>
+      step.name === 'opportunity' && isProduction && opportunityId.trim()
+        ? 'crm.opportunity.update' : step.capability);
+    return registeredAgents.filter((agent) =>
+      capabilities.every((capability) => agent.permissions.includes(capability)) &&
+      (agent.maxRiskLevel === undefined || ['R2', 'R3'].includes(agent.maxRiskLevel)));
+  }, [registeredAgents, automatedSteps, isProduction, opportunityId]);
 
   function applySamplePreset() {
-    setLaunchMode('ol001_production');
+    setLaunchMode('pre_ol');
     setProductionConfirm(false);
     setWorkflowId(LEAD_TO_APPOINTMENT_V1.id);
     setMissionName(
-      `OL-001 · M${String(SAMPLE_CLIENT_M001.missionOrdinal).padStart(3, '0')} · ${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName}`,
+      `PRE-OL · ${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName}`,
     );
     setObjective(
-      `Qualify and advance ${SAMPLE_CLIENT_M001.leadName} (${SAMPLE_CLIENT_M001.clientName}) toward a booked appointment — live GHL opportunity ${SAMPLE_CLIENT_M001.opportunityId}`,
+      `Validate the lead-to-appointment flow with the ${SAMPLE_CLIENT_M001.leadName} fixture`,
     );
     setBudget('25');
     setLeadEmail('');
+    setClientName(SAMPLE_CLIENT_M001.clientName);
+    setLeadName(SAMPLE_CLIENT_M001.leadName);
+    setContactId(SAMPLE_CLIENT_M001.contactId);
+    setOpportunityId(SAMPLE_CLIENT_M001.opportunityId);
+    setPipelineId(SAMPLE_CLIENT_M001.pipelineId);
+    setStageId(SAMPLE_CLIENT_M001.stageId);
     setError(null);
   }
 
@@ -97,6 +141,27 @@ export default function NewMission() {
     }
     if (isProduction && !leadEmail.trim()) {
       setError('OL-001 Production requires a real lead email (no @example.invalid).');
+      return;
+    }
+    if (isProduction && template.id !== LEAD_TO_APPOINTMENT_V1.id) {
+      setError('Production Operator Loop requires the approval-gated Lead-to-Appointment workflow.');
+      return;
+    }
+    if (isProduction && (!clientName.trim() || !leadName.trim() || !contactId.trim() || !pipelineId.trim() || !stageId.trim())) {
+      setError('Production requires a client, lead, GHL contact, pipeline and stage.');
+      return;
+    }
+    if (isProduction && (
+      contactId.trim() === SAMPLE_CLIENT_M001.contactId ||
+      opportunityId.trim() === SAMPLE_CLIENT_M001.opportunityId ||
+      leadEmail.endsWith('@example.invalid')
+    )) {
+      setError('Fixture identifiers and example.invalid email cannot be used for a production mission.');
+      return;
+    }
+    const selectedAgent = eligibleAgents.find((agent) => agent.actorId === selectedAgentId);
+    if (isProduction && !selectedAgent) {
+      setError('Select a registered tenant agent with every workflow capability and an R2 risk ceiling.');
       return;
     }
 
@@ -120,18 +185,19 @@ export default function NewMission() {
       launchedFrom: 'operator-console',
       workflowTemplateId: template.id,
       launchMode: isProduction ? 'ol001_production' : 'pre_ol',
+      automatedStepCount: automatedSteps.length,
+      retryCount: 0,
     };
 
     if (isProduction) {
-      cohortMeta.missionOrdinal = SAMPLE_CLIENT_M001.missionOrdinal;
       cohortMeta.cohortTarget = SAMPLE_CLIENT_M001.cohortTarget;
-      cohortMeta.clientName = SAMPLE_CLIENT_M001.clientName;
-      cohortMeta.leadName = SAMPLE_CLIENT_M001.leadName;
-      cohortMeta.ghlContactId = SAMPLE_CLIENT_M001.contactId;
-      cohortMeta.ghlOpportunityId = SAMPLE_CLIENT_M001.opportunityId;
+      cohortMeta.clientName = clientName.trim();
+      cohortMeta.leadName = leadName.trim();
+      cohortMeta.ghlContactId = contactId.trim();
+      if (opportunityId.trim()) cohortMeta.ghlOpportunityId = opportunityId.trim();
     }
 
-    const actor = {
+    const draftActor = {
       actorType: 'agent' as const,
       actorId,
       agentId,
@@ -152,11 +218,12 @@ export default function NewMission() {
       ...(costBudget !== undefined ? { costBudget } : {}),
       metadata: cohortMeta,
     };
+    const actor = isProduction ? selectedAgent! : draftActor;
 
     const name =
       missionName.trim() ||
       (isProduction
-        ? `OL-001 · M001 · ${SAMPLE_CLIENT_M001.clientName} · ${new Date(stamp).toISOString().slice(0, 16)}`
+        ? `OL-001 · ${clientName.trim()} · ${leadName.trim()} · ${new Date(stamp).toISOString().slice(0, 16)}`
         : `PRE-OL · ${template.label} · ${new Date(stamp).toISOString().slice(0, 16)}`);
 
     const body: Record<string, unknown> = {
@@ -189,15 +256,14 @@ export default function NewMission() {
         name: template.label,
         version: template.version,
         description: template.description,
-        steps: template.steps
-          .filter((s) => !s.humanOperated)
+        steps: automatedSteps
           .map(({ name: stepName, capability, riskLevel, description }) => {
             // Entity-state: existing opportunityId → update, else create.
             const resolvedCapability =
               stepName === 'opportunity' &&
               capability === 'crm.opportunity.create' &&
               isProduction &&
-              SAMPLE_CLIENT_M001.opportunityId
+              opportunityId.trim()
                 ? 'crm.opportunity.update'
                 : capability;
             return {
@@ -224,12 +290,12 @@ export default function NewMission() {
         productionEconomic,
         synthetic: false,
         source: 'operator-console',
+        operatorLoopAutoContinue: true,
         ...(isProduction
           ? {
-              clientName: SAMPLE_CLIENT_M001.clientName,
-              missionOrdinal: SAMPLE_CLIENT_M001.missionOrdinal,
-              ghlContactId: SAMPLE_CLIENT_M001.contactId,
-              ghlOpportunityId: SAMPLE_CLIENT_M001.opportunityId,
+              clientName: clientName.trim(),
+              ghlContactId: contactId.trim(),
+              ...(opportunityId.trim() ? { ghlOpportunityId: opportunityId.trim() } : {}),
             }
           : {}),
         ...(template.secureAutomationStandard
@@ -240,22 +306,24 @@ export default function NewMission() {
 
     if (template.id === 'lead-to-appointment-v1') {
       body.stepPayloads = {
-        research: { source: isProduction ? 'aion-ol001' : 'aion-l2a' },
-        enrich: { source: isProduction ? 'aion-ol001' : 'aion-l2a' },
+        ...(isProduction ? { 'contact-read': { provider: 'ghl', contactId: contactId.trim() } } : {}),
+        ...(!isProduction ? {
+          research: { source: 'aion-l2a' },
+          enrich: { source: 'aion-l2a' },
+        } : {}),
         opportunity: {
           provider: 'ghl',
           name: isProduction
-            ? `${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName}`
+            ? `${clientName.trim()} · ${leadName.trim()}`
             : `L2A opportunity ${stamp}`,
           ...(isProduction
             ? {
-                contactId: SAMPLE_CLIENT_M001.contactId,
-                opportunityId: SAMPLE_CLIENT_M001.opportunityId,
-                pipelineId: SAMPLE_CLIENT_M001.pipelineId,
-                stage: SAMPLE_CLIENT_M001.stageId,
-                stageId: SAMPLE_CLIENT_M001.stageId,
+                contactId: contactId.trim(),
+                ...(opportunityId.trim() ? { opportunityId: opportunityId.trim() } : {}),
+                pipelineId: pipelineId.trim(),
+                stage: stageId.trim(),
+                stageId: stageId.trim(),
                 status: 'open',
-                value: 500,
               }
             : {}),
           ...(leadEmail.trim() ? { contactEmail: leadEmail.trim() } : {}),
@@ -263,26 +331,26 @@ export default function NewMission() {
         'follow-up-task': {
           provider: 'ghl',
           title: isProduction
-            ? `Book appointment — ${SAMPLE_CLIENT_M001.leadName}`
+            ? `Book appointment — ${leadName.trim()}`
             : 'Book appointment (human)',
           body: 'SA-STD-001: human books appointment until crm.appointment.* is active',
           // GHL contact tasks require dueDate.
           dueDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
-          ...(isProduction ? { contactId: SAMPLE_CLIENT_M001.contactId } : {}),
+          ...(isProduction ? { contactId: contactId.trim() } : {}),
         },
         'crm-note': {
           provider: 'ghl',
           body: isProduction
-            ? `OL-001 M001 · ${SAMPLE_CLIENT_M001.clientName} · ${SAMPLE_CLIENT_M001.leadName} — qualification note`
+            ? `OL-001 · ${clientName.trim()} · ${leadName.trim()} — qualification note`
             : 'Lead-to-Appointment v1 qualification note',
-          ...(isProduction ? { contactId: SAMPLE_CLIENT_M001.contactId } : {}),
+          ...(isProduction ? { contactId: contactId.trim() } : {}),
         },
         'draft-message': {
           provider: 'ghl',
           body: isProduction
-            ? `Draft follow-up for ${SAMPLE_CLIENT_M001.leadName} — do not send (OL-001 L2A rules)`
+            ? `Draft follow-up for ${leadName.trim()} — do not send (OL-001 L2A rules)`
             : 'Draft follow-up — do not send (L2A v1 communication rules)',
-          ...(isProduction ? { contactId: SAMPLE_CLIENT_M001.contactId } : {}),
+          ...(isProduction ? { contactId: contactId.trim() } : {}),
         },
       };
     } else if (leadEmail.trim()) {
@@ -294,9 +362,9 @@ export default function NewMission() {
             source: isProduction ? 'aion-ol001' : 'aion-pre-ol',
             ...(isProduction
               ? {
-                  firstName: 'Sample',
-                  lastName: 'Lead',
-                  contactId: SAMPLE_CLIENT_M001.contactId,
+                  firstName: leadName.trim().split(' ')[0] ?? leadName.trim(),
+                  lastName: leadName.trim().split(' ').slice(1).join(' '),
+                  contactId: contactId.trim(),
                 }
               : {}),
           },
@@ -379,12 +447,15 @@ export default function NewMission() {
             <Button
               type="button"
               variant={isProduction ? 'default' : 'outline'}
-              onClick={() => setLaunchMode('ol001_production')}
+              onClick={() => {
+                setLaunchMode('ol001_production');
+                setWorkflowId(LEAD_TO_APPOINTMENT_V1.id);
+              }}
             >
               OL-001 Production
             </Button>
             <Button type="button" variant="secondary" onClick={applySamplePreset}>
-              Example Client M001 preset
+              PRE-OL fixture preset
             </Button>
           </div>
           {isProduction ? (
@@ -393,8 +464,7 @@ export default function NewMission() {
                 Tags <span className="font-mono">cohort=OL-001</span> and{' '}
                 <span className="font-mono">productionEconomic=true</span>. Counts as{' '}
                 <span className="font-mono">
-                  M{String(SAMPLE_CLIENT_M001.missionOrdinal).padStart(3, '0')} /{' '}
-                  {SAMPLE_CLIENT_M001.cohortTarget}
+                OL-001 / {SAMPLE_CLIENT_M001.cohortTarget}
                 </span>{' '}
                 when Runtime accepts the run.
               </p>
@@ -424,6 +494,26 @@ export default function NewMission() {
           <Input id="tenant" value={tenantId} readOnly className="font-mono text-xs" />
         </div>
 
+        {isProduction && (
+          <div className="space-y-1.5">
+            <Label>Registered agent</Label>
+            <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+              <SelectTrigger><SelectValue placeholder="Choose a tenant agent" /></SelectTrigger>
+              <SelectContent>
+                {eligibleAgents.map((agent) => (
+                  <SelectItem key={agent.actorId} value={agent.actorId}>
+                    {agent.name} · {agent.actorId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {agentsError && <p className="text-xs text-destructive">{agentsError}</p>}
+            {!agentsError && eligibleAgents.length === 0 && (
+              <p className="text-xs text-muted-foreground">No registered agent has every required capability. Provision one before launch.</p>
+            )}
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <Label htmlFor="name">Mission name {isProduction ? '' : '(optional)'}</Label>
           <Input
@@ -432,7 +522,7 @@ export default function NewMission() {
             onChange={(e) => setMissionName(e.target.value)}
             placeholder={
               isProduction
-                ? 'OL-001 · M001 · Example Client · …'
+                ? 'OL-001 · Client · Lead'
                 : 'PRE-OL · … (auto if empty)'
             }
             required={isProduction}
@@ -500,12 +590,34 @@ export default function NewMission() {
             onChange={(e) => setLeadEmail(e.target.value)}
             placeholder={
               isProduction
-                ? 'Real lead email for Example Client / Sample'
+                ? 'Real lead email'
                 : 'Uses placeholder @example.invalid if empty'
             }
             required={isProduction}
           />
         </div>
+
+        {isProduction && (
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <p className="text-xs text-muted-foreground">Real GHL record for this mission. The operator will review the proposed opportunity action before it runs.</p>
+            {([
+              ['Client name', clientName, setClientName],
+              ['Lead name', leadName, setLeadName],
+              ['GHL contact ID', contactId, setContactId],
+              ['GHL pipeline ID', pipelineId, setPipelineId],
+              ['GHL stage ID', stageId, setStageId],
+            ] as const).map(([label, value, setter]) => (
+              <label key={label} className="block text-xs text-muted-foreground">
+                {label}
+                <Input className="mt-1 font-mono text-xs" value={value} onChange={(e) => setter(e.target.value)} required />
+              </label>
+            ))}
+            <label className="block text-xs text-muted-foreground">
+              Existing GHL opportunity ID (optional; leave blank to create)
+              <Input className="mt-1 font-mono text-xs" value={opportunityId} onChange={(e) => setOpportunityId(e.target.value)} />
+            </label>
+          </div>
+        )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -513,7 +625,7 @@ export default function NewMission() {
           {submitting
             ? 'Launching…'
             : isProduction
-              ? 'Launch OL-001 Production · M001'
+              ? 'Launch OL-001 Production'
               : 'Launch PRE-OL mission'}
         </Button>
       </form>
