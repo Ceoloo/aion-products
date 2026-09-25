@@ -6,6 +6,23 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 
+function proposedAction(command: unknown): { capability: string; name: string; payload: string; actor: string } {
+  const c = command && typeof command === 'object' ? command as Record<string, unknown> : {};
+  const actor = c.actor && typeof c.actor === 'object' ? c.actor as Record<string, unknown> : {};
+  const redact = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(redact);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) =>
+      [key, /token|secret|password|authorization|api.?key/i.test(key) ? '[redacted]' : redact(item)]));
+  };
+  return {
+    capability: String(c.capability ?? 'unknown capability'),
+    name: String(c.name ?? 'Unnamed action'),
+    payload: JSON.stringify(redact(c.payload ?? {}), null, 2),
+    actor: String(actor.name ?? actor.actorId ?? 'unknown actor'),
+  };
+}
+
 /**
  * Approval queue — inspect + decide via Runtime POST /v1/approvals/:id/decision.
  * UI is not the authority; every Approve/Deny is a governed capability call.
@@ -29,6 +46,7 @@ export function ApprovalPanel({
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   if (!open) return null;
 
@@ -36,12 +54,14 @@ export function ApprovalPanel({
     setBusyId(approval.approvalId);
     setActionError(null);
     try {
-      await RuntimeApi.decideApproval(tenantId, approval.approvalId, {
+      const result = await RuntimeApi.decideApproval(tenantId, approval.approvalId, {
         approve,
-        note: approve
-          ? 'approved via Operator Console'
-          : 'denied via Operator Console',
+        note: notes[approval.approvalId]?.trim() ||
+          (approve ? 'approved via Operator Console' : 'denied via Operator Console'),
       });
+      if (result.continuation?.status === 'failed') {
+        setActionError('The decision was recorded, but mission continuation failed. Inspect the mission before retrying.');
+      }
       onDecided?.();
     } catch (err: unknown) {
       const msg =
@@ -97,6 +117,15 @@ export function ApprovalPanel({
                 </span>
               </div>
               <p className="text-sm">{a.reason ?? '—'}</p>
+              <div className="rounded border border-border/70 bg-background/50 p-2 text-xs space-y-1">
+                <p className="font-medium text-foreground">{proposedAction(a.command).name}</p>
+                <p>Capability: <span className="font-mono text-foreground">{proposedAction(a.command).capability}</span></p>
+                <p>Requested by: <span className="text-foreground">{proposedAction(a.command).actor}</span></p>
+                <details>
+                  <summary className="cursor-pointer text-primary">Proposed action data</summary>
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-foreground">{proposedAction(a.command).payload}</pre>
+                </details>
+              </div>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 <dt>Risk</dt>
                 <dd className="font-mono text-foreground">{a.riskLevel ?? '—'}</dd>
@@ -131,6 +160,15 @@ export function ApprovalPanel({
                 <dt>Requested</dt>
                 <dd className="font-mono">{a.requestedAt ?? '—'}</dd>
               </dl>
+              <label className="block text-xs text-muted-foreground">
+                Decision note
+                <input
+                  className="mt-1 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm text-foreground"
+                  value={notes[a.approvalId] ?? ''}
+                  onChange={(e) => setNotes((current) => ({ ...current, [a.approvalId]: e.target.value }))}
+                  placeholder="Reason or evidence for this decision"
+                />
+              </label>
               <div className="flex gap-2 pt-1">
                 <Button
                   type="button"
