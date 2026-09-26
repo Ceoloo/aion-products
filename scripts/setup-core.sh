@@ -13,13 +13,14 @@
 # Idempotent: skips the clone+build if the vendored dist is already present.
 set -euo pipefail
 
-# Pinned aion-core commit (bump deliberately, as a reviewed change).
+# Pinned aion-core commit (bump deliberately, as a reviewed change). Must equal
+# aion-data CORE_REF and aion-runtime CORE_REF — one contract surface system-wide.
 CORE_REPO="https://github.com/Ceoloo/aion-core"
-CORE_SHA="5ea731a67b4ad40575cbf0e5893f665c8d02ea8c"
+CORE_SHA="52ecf40b860ec9e32fe62c3fc8a8252c5ad17157"
 DEST=".vendor/aion-core"
 
-if [ -f "$DEST/dist/index.js" ]; then
-  echo "@aion/core already vendored at $DEST (dist present) — skipping."
+if [ -f "$DEST/dist/index.js" ] && [ "$(cat "$DEST/.aion-core-sha" 2>/dev/null)" = "$CORE_SHA" ]; then
+  echo "@aion/core already vendored at $DEST @ ${CORE_SHA} — skipping."
   exit 0
 fi
 
@@ -51,5 +52,6 @@ node -e '
     JSON.stringify({ name, version, private: true, type, exports, main, types, license, dependencies }, null, 2) + "\n",
   );
 '
+echo "$CORE_SHA" > "$DEST/.aion-core-sha"
 rm -rf "$BUILD_DIR"
 echo "@aion/core built and vendored (dist + trimmed manifest) at $DEST"
