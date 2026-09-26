@@ -16,7 +16,7 @@ set -euo pipefail
 # Pinned aion-core commit (bump deliberately, as a reviewed change). Must equal
 # aion-data CORE_REF and aion-runtime CORE_REF — one contract surface system-wide.
 CORE_REPO="https://github.com/Ceoloo/aion-core"
-CORE_SHA="699301357259593545ba8bf445e966389f7b1843"
+CORE_SHA="52ecf40b860ec9e32fe62c3fc8a8252c5ad17157"
 DEST=".vendor/aion-core"
 
 if [ -f "$DEST/dist/index.js" ] && [ "$(cat "$DEST/.aion-core-sha" 2>/dev/null)" = "$CORE_SHA" ]; then
