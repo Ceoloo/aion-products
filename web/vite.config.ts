@@ -12,9 +12,11 @@ function browserBoundary(): Plugin {
     name: 'aion-browser-boundary',
     enforce: 'pre',
     resolveId(source, importer) {
-      // The pinned canonical Core uses only randomUUID from node:crypto.
-      // Adapt that precise import to Web Crypto; never polyfill Node wholesale.
-      if (source === 'node:crypto' && importer?.replaceAll('\\', '/').endsWith('/aion-core/dist/contracts/identifiers.js')) {
+      // Canonical Core contracts import node:crypto for id minting (randomUUID)
+      // and server-side idempotency hashing (createHash). Adapt exactly those
+      // Core contract imports to a narrow Web Crypto shim; never polyfill Node
+      // wholesale, and never for any other importer.
+      if (source === 'node:crypto' && /\/aion-core\/dist\/contracts\/[^/]+\.js$/.test(importer?.replaceAll('\\', '/') ?? '')) {
         return browserCrypto;
       }
       if (source.startsWith('node:') || builtins.has(source) || source.startsWith('@anthropic-ai/sdk')) {
