@@ -133,13 +133,6 @@ export default function MissionControl() {
         )}
       </header>
 
-      <section className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-2 animate-fade-up">
-        <Kpi label="Missions" value={missions.length} />
-        <Kpi label="Human intervention rate" value={interventionRate} />
-        <Kpi label="Cost / mission" value={costPerMission} />
-        <Kpi label="EV / execution" value={evPerExe} />
-      </section>
-
       <div className="mb-4 flex flex-wrap gap-1.5 animate-fade-up">
         {FILTERS.map((f) => (
           <button
@@ -223,6 +216,26 @@ export default function MissionControl() {
             );
           })}
         </ul>
+      )}
+
+      {!loading && !error && (
+        <details className="mt-8 group animate-fade-up">
+          <summary className="cursor-pointer list-none text-[0.7rem] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
+            <span className="inline-flex items-center gap-2">
+              Economics snapshot
+              <span className="font-mono normal-case tracking-normal text-[0.65rem] opacity-70 group-open:hidden">
+                {missions.length} missions
+                {interventionRate ? ` · ${interventionRate} intervene` : ''}
+              </span>
+            </span>
+          </summary>
+          <section className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Kpi label="Missions" value={missions.length} />
+            <Kpi label="Human intervention rate" value={interventionRate} />
+            <Kpi label="Cost / mission" value={costPerMission} />
+            <Kpi label="EV / execution" value={evPerExe} />
+          </section>
+        </details>
       )}
 
       <ApprovalPanel

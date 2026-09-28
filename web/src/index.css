@@ -95,10 +95,11 @@
     animation: live-ping 1.8s ease-out infinite;
   }
 
+  /* Quiet wash — enough atmosphere for Atlas panels without neon chrome */
   .atlas-glow {
     background:
-      linear-gradient(135deg, hsl(36 86% 58% / 0.12), transparent 40%),
-      linear-gradient(225deg, hsl(174 70% 48% / 0.1), transparent 45%);
+      linear-gradient(180deg, hsl(36 50% 40% / 0.04), transparent 55%),
+      linear-gradient(200deg, hsl(174 40% 35% / 0.035), transparent 50%);
   }
 
   .composer-shell {

@@ -60,20 +60,15 @@ export function Debrief({
           <p className="mt-2 text-sm text-muted-foreground">
             Your corrections are ground truth — they train Copilot and unlock pipeline movement. CRM writes still land in GoHighLevel.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full border border-border/70 bg-background/40 px-2.5 py-1">
-              Stage · <span className="text-foreground">{state.conversationStage}</span>
-            </span>
-            <span className="rounded-full border border-border/70 bg-background/40 px-2.5 py-1">
-              Urgency · <span className="text-foreground">{state.urgency}</span>
-            </span>
-            <span className="rounded-full border border-border/70 bg-background/40 px-2.5 py-1">
-              Readiness · <span className="text-foreground">{state.readiness.level}</span>
-            </span>
-            <span className="rounded-full border border-border/70 bg-background/40 px-2.5 py-1 font-mono">
-              {judged}/{GT_FIELDS.length} fields judged
-            </span>
-          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Stage <span className="text-foreground">{state.conversationStage}</span>
+            <span className="mx-1.5 text-border">·</span>
+            Urgency <span className="text-foreground">{state.urgency}</span>
+            <span className="mx-1.5 text-border">·</span>
+            Readiness <span className="text-foreground">{state.readiness.level}</span>
+            <span className="mx-1.5 text-border">·</span>
+            <span className="font-mono text-foreground">{judged}/{GT_FIELDS.length}</span> fields judged
+          </p>
         </div>
 
         <div className="space-y-5 px-6 py-6">
@@ -119,7 +114,7 @@ export function Debrief({
                   key={g}
                   size="sm"
                   variant={guidance === g ? 'default' : 'outline'}
-                  className="rounded-full"
+                  className="rounded-md"
                   onClick={() => setGuidance(g)}
                 >
                   {titleCase(g)}

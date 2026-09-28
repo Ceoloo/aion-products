@@ -184,13 +184,14 @@ export function Shell({
       <main className="flex-1 container py-6 md:py-8">{children}</main>
 
       <nav
-        className="sticky bottom-0 z-20 grid grid-cols-4 border-t border-border/70 bg-background/90 backdrop-blur-md md:hidden"
+        className="sticky bottom-0 z-20 grid grid-cols-5 border-t border-border/70 bg-background/90 backdrop-blur-md md:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="Quick nav"
       >
         {[
           { to: '/', label: 'Command', Icon: LayoutDashboard, end: true },
           { to: '/ol001', label: 'OL-001', Icon: Target, end: false },
+          { to: '/implementations', label: 'IE-001', Icon: Briefcase, end: false },
           { to: '/missions', label: 'Missions', Icon: ListChecks, end: true },
           { to: '/missions/new', label: 'Launch', Icon: Plus, end: false },
         ].map(({ to, label, Icon, end }) => (
