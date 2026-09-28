@@ -75,6 +75,17 @@ In **staging/production** (ADR-007 / ADR-005 fail-closed):
 Local/tests may omit the API key and tenant. Image packaging gates may set
 `AION_ALLOW_IN_MEMORY_CONTROL_PLANE=1` to boot without Runtime.
 
+The HTTP Copilot service checkpoints each accepted active turn and feedback to
+Runtime's `revenue-sessions` row. A new process restores the committed Copilot
+state and its Core execution IDs without replaying prior model calls. A request
+interrupted after its `inFlight` marker is **not** retried automatically: the
+session returns `409 reconciliation_required` until an operator checks the
+Runtime/provider records. The Runtime API does not support deleting an active
+session, so HTTP DELETE returns `409 durable_delete_unavailable` in this mode.
+This does not establish exactly-once provider execution or authenticated
+client-facing Copilot access; keep the HTTP service internal until those gates
+are separately proven.
+
 ## Run it
 
 No build step, no API key required. Every AI step is governed by the canonical

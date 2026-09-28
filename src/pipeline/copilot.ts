@@ -48,6 +48,17 @@ export interface BeginOptions {
   context: ContextInput;
 }
 
+/** A committed turn boundary. Restoring this does not rerun model/Core work. */
+export interface CopilotCheckpoint {
+  context: PreCallContext;
+  state: DealState;
+  transcript: Turn[];
+  surfaced: Recommendation[];
+  outcomes: RecommendationOutcome[];
+  lineage: LineageRecord[];
+  pendingRecommendationIds: string[];
+}
+
 const STAGE_WINDOW = 5;
 
 export class LiveCopilot {
@@ -73,6 +84,38 @@ export class LiveCopilot {
     const context = await assembleContext(opts.exec, opts.context);
     const state = initialState(opts.exec.callId, opts.schema, context);
     return new LiveCopilot(opts.exec, opts.schema, context, state);
+  }
+
+  static restore(exec: AiExecutor, schema: SalesSchema, checkpoint: CopilotCheckpoint): LiveCopilot {
+    if (checkpoint.state.callId !== exec.callId || checkpoint.state.industry !== schema.key) {
+      throw new Error('copilot checkpoint identity mismatch');
+    }
+    const saved = structuredClone(checkpoint);
+    const copilot = new LiveCopilot(exec, schema, saved.context, saved.state);
+    copilot.transcript.push(...saved.transcript);
+    copilot.surfaced.push(...saved.surfaced);
+    copilot.outcomes.push(...saved.outcomes);
+    copilot.lineage.push(...saved.lineage);
+    for (const id of saved.pendingRecommendationIds) {
+      const row = copilot.lineage.find((r) => r.recommendationId === id);
+      if (!row || row.prospectResponseTurn !== null) {
+        throw new Error('invalid pending recommendation in copilot checkpoint');
+      }
+      copilot.pending.push(row);
+    }
+    return copilot;
+  }
+
+  checkpoint(): CopilotCheckpoint {
+    return structuredClone({
+      context: this.context,
+      state: this.state,
+      transcript: this.transcript,
+      surfaced: this.surfaced,
+      outcomes: this.outcomes,
+      lineage: this.lineage,
+      pendingRecommendationIds: this.pending.map((r) => r.recommendationId),
+    });
   }
 
   /** Ingest one conversation turn and return the refreshed live guidance. */
