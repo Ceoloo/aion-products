@@ -46,6 +46,9 @@ import {
 import { createSessionStore } from './validation/runtime-session-store.ts';
 import type { SessionStore } from './validation/store.ts';
 import { assembleSessionRecord } from './validation/record.ts';
+import { LiveCopilot as Copilot } from './pipeline/copilot.ts';
+import { AiExecutionService as ExecutionService } from './platform/ai-execution.ts';
+import { RuntimeActiveSessionStore, type ActiveSessionCheckpoint } from './validation/active-session.ts';
 
 const SERVICE = 'aion-revenue-copilot';
 const PORT = Number(process.env.PORT ?? 8080);
@@ -68,6 +71,7 @@ const runtimeClient = RUNTIME_URL
 const durableStore: SessionStore | null = RUNTIME_URL
   ? createSessionStore({ runtimeUrl: RUNTIME_URL })
   : null;
+const activeStore = runtimeClient ? new RuntimeActiveSessionStore(runtimeClient) : null;
 
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 } as const;
 
@@ -101,10 +105,56 @@ interface Session {
   createdAt: number;
   lastAccessAt: number;
   finished: boolean;
+  revision?: number;
+  inFlight: ActiveSessionCheckpoint['inFlight'];
 }
 
 const sessions = new Map<string, Session>();
+const busy = new Set<string>();
 let accepting = true;
+
+function checkpoint(s: Session): ActiveSessionCheckpoint {
+  return {
+    version: 1,
+    sessionId: s.id,
+    callId: s.callId,
+    industry: s.industry,
+    context: s.context,
+    createdAt: s.createdAt,
+    lastAccessAt: s.lastAccessAt,
+    inFlight: s.inFlight,
+    copilot: s.copilot.checkpoint(),
+    execution: s.exec.checkpoint(),
+  };
+}
+
+async function getSession(id: string): Promise<Session | undefined> {
+  const cached = sessions.get(id);
+  if (cached) return cached;
+  const row = await activeStore?.get(id);
+  if (!row) return undefined;
+  // Concurrent reads after restart must share one in-process Session object.
+  const loaded = sessions.get(id);
+  if (loaded) return loaded;
+  const saved = row.checkpoint;
+  const exec = new ExecutionService({ callId: saved.callId });
+  exec.restore(saved.execution);
+  const copilot = Copilot.restore(exec, getSchema(saved.industry), saved.copilot);
+  const session: Session = {
+    id: saved.sessionId, callId: saved.callId, industry: saved.industry,
+    context: saved.context, copilot, exec, createdAt: saved.createdAt,
+    lastAccessAt: saved.lastAccessAt, finished: false, revision: row.revision,
+    inFlight: saved.inFlight,
+  };
+  sessions.set(id, session);
+  return session;
+}
+
+async function saveActive(s: Session): Promise<void> {
+  if (!activeStore) return;
+  if (s.revision === undefined) throw new Error('active session revision missing');
+  s.revision = await activeStore.save(checkpoint(s), s.revision);
+}
 
 function pruneSessions(now = Date.now()): void {
   for (const [id, s] of sessions) {
@@ -299,7 +349,18 @@ async function handle(
         createdAt: now,
         lastAccessAt: now,
         finished: false,
+        inFlight: null,
       });
+
+      if (activeStore) {
+        const session = sessions.get(sessionId)!;
+        try {
+          session.revision = await activeStore.create(checkpoint(session));
+        } catch (err) {
+          sessions.delete(sessionId);
+          throw err;
+        }
+      }
 
       done(201, {
         sessionId,
@@ -313,6 +374,11 @@ async function handle(
 
     if (method === 'GET' && path === '/v1/sessions') {
       pruneSessions();
+      if (activeStore) {
+        for (const row of await activeStore.list()) {
+          if (!sessions.has(row.checkpoint.sessionId)) await getSession(row.checkpoint.sessionId);
+        }
+      }
       const items = [...sessions.values()].map((s) => ({
         sessionId: s.id,
         callId: s.callId,
@@ -329,12 +395,18 @@ async function handle(
     const sessionIdMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);
     if (sessionIdMatch && (method === 'GET' || method === 'DELETE')) {
       const sessionId = decodeURIComponent(sessionIdMatch[1]!);
-      const session = sessions.get(sessionId);
+      const session = await getSession(sessionId);
       if (!session) {
         done(404, { error: 'session_not_found' });
         return;
       }
       if (method === 'DELETE') {
+        // Runtime has no active-session delete. Prevent a deleted session from
+        // silently reappearing after restart until durable deletion exists.
+        if (activeStore) {
+          done(409, { error: 'durable_delete_unavailable' });
+          return;
+        }
         sessions.delete(sessionId);
         done(200, { deleted: true, sessionId });
         return;
@@ -356,13 +428,17 @@ async function handle(
 
     const turnMatch = path.match(/^\/v1\/sessions\/([^/]+)\/turns$/);
     if (method === 'POST' && turnMatch) {
-      const session = sessions.get(decodeURIComponent(turnMatch[1]!));
+      const session = await getSession(decodeURIComponent(turnMatch[1]!));
       if (!session) {
         done(404, { error: 'session_not_found' });
         return;
       }
       if (session.finished) {
         done(409, { error: 'session_finished' });
+        return;
+      }
+      if (session.inFlight || busy.has(session.id)) {
+        done(409, { error: session.inFlight ? 'reconciliation_required' : 'session_busy' });
         return;
       }
       const raw = await readBody(req);
@@ -382,8 +458,29 @@ async function handle(
         return;
       }
 
-      session.lastAccessAt = Date.now();
-      const update = await session.copilot.ingest(turn);
+      if (session.copilot.getTranscript().some((prior) => prior.index === turn.index)) {
+        done(409, { error: 'turn_already_recorded' });
+        return;
+      }
+      if (busy.has(session.id)) {
+        done(409, { error: 'session_busy' });
+        return;
+      }
+      busy.add(session.id);
+      let update;
+      try {
+        session.lastAccessAt = Date.now();
+        session.inFlight = 'turn';
+        await saveActive(session);
+        update = await session.copilot.ingest(turn);
+        session.inFlight = null;
+        await saveActive(session);
+      } catch (err) {
+        sessions.delete(session.id);
+        throw err;
+      } finally {
+        busy.delete(session.id);
+      }
       done(200, {
         sessionId: session.id,
         callId: session.callId,
@@ -397,9 +494,13 @@ async function handle(
 
     const feedbackMatch = path.match(/^\/v1\/sessions\/([^/]+)\/feedback$/);
     if (method === 'POST' && feedbackMatch) {
-      const session = sessions.get(decodeURIComponent(feedbackMatch[1]!));
+      const session = await getSession(decodeURIComponent(feedbackMatch[1]!));
       if (!session) {
         done(404, { error: 'session_not_found' });
+        return;
+      }
+      if (session.inFlight || busy.has(session.id)) {
+        done(409, { error: session.inFlight ? 'reconciliation_required' : 'session_busy' });
         return;
       }
       const raw = await readBody(req);
@@ -432,23 +533,59 @@ async function handle(
         });
         return;
       }
-      session.lastAccessAt = Date.now();
-      session.copilot.recordFeedback(
-        recommendationId,
-        feedback,
-        atTurn,
-        typeof body.note === 'string' ? body.note : undefined,
-      );
+      if (session.copilot.getOutcomes().some((prior) =>
+        prior.recommendationId === recommendationId && prior.atTurn === atTurn &&
+        prior.feedback === feedback && prior.note === (typeof body.note === 'string' ? body.note : undefined)
+      )) {
+        done(200, { sessionId: session.id, recorded: true, replay: true });
+        return;
+      }
+      if (busy.has(session.id)) {
+        done(409, { error: 'session_busy' });
+        return;
+      }
+      busy.add(session.id);
+      try {
+        session.lastAccessAt = Date.now();
+        session.inFlight = 'feedback';
+        await saveActive(session);
+        session.copilot.recordFeedback(
+          recommendationId,
+          feedback,
+          atTurn,
+          typeof body.note === 'string' ? body.note : undefined,
+        );
+        session.inFlight = null;
+        await saveActive(session);
+      } catch (err) {
+        sessions.delete(session.id);
+        throw err;
+      } finally {
+        busy.delete(session.id);
+      }
       done(200, { sessionId: session.id, recorded: true });
       return;
     }
 
     const finishMatch = path.match(/^\/v1\/sessions\/([^/]+)\/finish$/);
     if (method === 'POST' && finishMatch) {
-      const session = sessions.get(decodeURIComponent(finishMatch[1]!));
+      const session = await getSession(decodeURIComponent(finishMatch[1]!));
       if (!session) {
         done(404, { error: 'session_not_found' });
         return;
+      }
+      if (session.inFlight || busy.has(session.id)) {
+        done(409, { error: session.inFlight ? 'reconciliation_required' : 'session_busy' });
+        return;
+      }
+      busy.add(session.id);
+      try {
+        session.inFlight = 'finish';
+        await saveActive(session);
+      } catch (err) {
+        sessions.delete(session.id);
+        busy.delete(session.id);
+        throw err;
       }
       session.lastAccessAt = Date.now();
       session.finished = true;
@@ -486,7 +623,7 @@ async function handle(
         businessOutcome = { skipped: 'no_run_ids' };
       }
 
-      // Best-effort durable session final when Runtime session store is wired.
+      // The final record must commit before reporting success.
       if (durableStore) {
         try {
           const record = assembleSessionRecord({
@@ -508,8 +645,13 @@ async function handle(
             sessionId: session.id,
             error: e instanceof Error ? e.message : String(e),
           });
+          sessions.delete(session.id);
+          busy.delete(session.id);
+          throw e;
         }
       }
+
+      busy.delete(session.id);
 
       done(200, {
         sessionId: session.id,

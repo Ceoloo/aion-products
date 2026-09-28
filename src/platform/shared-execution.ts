@@ -92,18 +92,30 @@ interface ExecutionLogEntry {
   mode: 'in-memory' | 'runtime';
 }
 
+export interface ExecutionCheckpoint {
+  callId: string;
+  actor: AgentActor;
+  mission: Mission;
+  log: ExecutionLogEntry[];
+  seq: number;
+  telemetryRows: number;
+  executionRows: number;
+}
+
 export class SharedExecutionService implements AiExecutor {
   readonly callId: string;
   private readonly plane: ControlPlane | null;
   private readonly runtime: RuntimeTransport | null;
-  private readonly actor: AgentActor;
-  private readonly mission: Mission;
+  private actor: AgentActor;
+  private mission: Mission;
   private readonly registry = new Map<string, AiTask<unknown, unknown>>();
   private readonly log: ExecutionLogEntry[] = [];
   private readonly llmConfigured: boolean;
   private readonly crmWriteConfidence: number;
   private readonly autoWriteInferredFacts: boolean;
   private seq = 0;
+  private priorTelemetryRows = 0;
+  private priorExecutionRows = 0;
 
   constructor(cfg: SharedExecutionConfig) {
     this.callId = cfg.callId;
@@ -183,6 +195,35 @@ export class SharedExecutionService implements AiExecutor {
 
   llmAvailable(): boolean {
     return this.llmConfigured;
+  }
+
+  checkpoint(): ExecutionCheckpoint {
+    const rows = this.plane ? this.plane.telemetrySink.all() : [];
+    return structuredClone({
+      callId: this.callId,
+      actor: this.actor,
+      mission: this.mission,
+      log: this.log,
+      seq: this.seq,
+      telemetryRows: this.priorTelemetryRows + rows.length,
+      executionRows: this.priorExecutionRows + rows.filter((r) => r.operation === 'execution').length,
+    });
+  }
+
+  restore(checkpoint: ExecutionCheckpoint): void {
+    if (checkpoint.callId !== this.callId || this.log.length !== 0) {
+      throw new Error('execution checkpoint identity mismatch');
+    }
+    if (checkpoint.log.some((entry) => entry.mode !== (this.runtime ? 'runtime' : 'in-memory'))) {
+      throw new Error('execution checkpoint transport mismatch');
+    }
+    const saved = structuredClone(checkpoint);
+    this.actor = saved.actor;
+    this.mission = saved.mission;
+    this.log.push(...saved.log);
+    this.seq = saved.seq;
+    this.priorTelemetryRows = saved.telemetryRows;
+    this.priorExecutionRows = saved.executionRows;
   }
 
   /** Accumulated cost units across this call's AI executions. */
@@ -407,7 +448,7 @@ export class SharedExecutionService implements AiExecutor {
    */
   traceSummary(): TraceSummary {
     const rows = this.plane ? this.plane.telemetrySink.all() : [];
-    const executionRows = rows.filter((r) => r.operation === 'execution').length;
+    const executionRows = this.priorExecutionRows + rows.filter((r) => r.operation === 'execution').length;
     const byModel: Record<string, number> = {};
     let fallbacks = 0;
     let totalLatency = 0;
@@ -419,7 +460,7 @@ export class SharedExecutionService implements AiExecutor {
     }
     return {
       total: this.log.length,
-      telemetryRows: rows.length,
+      telemetryRows: this.priorTelemetryRows + rows.length,
       executionRows,
       byModel,
       fallbacks,
