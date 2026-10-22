@@ -47,12 +47,17 @@ Endpoints:
 | GET | `/health/ready` | Readiness (no DB; accepting traffic) |
 | GET | `/` | Release identity |
 | POST | `/v1/sessions` | Begin call session (`industry` + `context`) |
-| GET | `/v1/sessions` | List live in-memory sessions |
-| GET | `/v1/sessions/:id` | Read session state + transcript |
-| DELETE | `/v1/sessions/:id` | Abandon / drop a live session |
-| POST | `/v1/sessions/:id/turns` | Ingest one turn → live guidance |
-| POST | `/v1/sessions/:id/feedback` | Record rep feedback |
-| POST | `/v1/sessions/:id/finish` | Freeze `CallIntelligence` report |
+| GET | `/v1/sessions` | List live in-memory sessions **owned by the caller** |
+| GET | `/v1/sessions/:id` | Read session state + transcript (owner only) |
+| DELETE | `/v1/sessions/:id` | Abandon / drop a live session (owner only) |
+| POST | `/v1/sessions/:id/turns` | Ingest one turn → live guidance (owner only) |
+| POST | `/v1/sessions/:id/feedback` | Record rep feedback (owner only) |
+| POST | `/v1/sessions/:id/finish` | Freeze `CallIntelligence` report (owner only) |
+
+**Inbound auth (AIO-39):** staging/production require
+`Authorization: Bearer <token>` matching `AION_COPILOT_API_KEY` or an entry in
+`AION_COPILOT_API_KEYS`. Sessions are bound to the authenticated `callerId` +
+`tenantId`. `AION_COPILOT_AUTH_MODE=open` is local-only.
 
 Sessions are **in-process memory** (TTL via `COPILOT_SESSION_TTL_MS`). Durable
 governance still rides `@aion/core` / optional Runtime client on each AI step —

@@ -46,6 +46,20 @@ import {
 import { createSessionStore } from './validation/runtime-session-store.ts';
 import type { SessionStore } from './validation/store.ts';
 import { assembleSessionRecord } from './validation/record.ts';
+import {
+  assertCallerTenantAccess,
+  authenticateCopilotRequest,
+  callerTenantFromRequest,
+  loadCopilotAuthConfig,
+  type CopilotAuthConfig,
+  type CopilotCaller,
+  CopilotAuthConfigError,
+} from './server/inbound-auth.ts';
+import {
+  BodyTooLargeError,
+  DEFAULT_MAX_BODY_BYTES,
+  readBodyLimited,
+} from './server/read-body.ts';
 
 const SERVICE = 'aion-revenue-copilot';
 const PORT = Number(process.env.PORT ?? 8080);
@@ -59,6 +73,9 @@ const LOG_LEVEL = (process.env.LOG_LEVEL ?? 'info') as
   | 'warn'
   | 'error';
 const SESSION_TTL_MS = Number(process.env.COPILOT_SESSION_TTL_MS ?? 60 * 60 * 1000);
+const MAX_BODY_BYTES = Number(
+  process.env.COPILOT_MAX_BODY_BYTES ?? DEFAULT_MAX_BODY_BYTES,
+);
 // ADR-007: staging/production fail-closed unless packaging escape hatch is set.
 const RUNTIME_URL = resolveRuntimeUrl();
 const runtimeClient = RUNTIME_URL
@@ -68,6 +85,29 @@ const runtimeClient = RUNTIME_URL
 const durableStore: SessionStore | null = RUNTIME_URL
   ? createSessionStore({ runtimeUrl: RUNTIME_URL })
   : null;
+
+let authConfig: CopilotAuthConfig;
+try {
+  authConfig = loadCopilotAuthConfig(process.env);
+} catch (err) {
+  const message =
+    err instanceof CopilotAuthConfigError
+      ? err.message
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  process.stderr.write(
+    `${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: SERVICE,
+      environment: ENVIRONMENT,
+      message: 'auth_config_invalid',
+      error: message,
+    })}\n`,
+  );
+  process.exit(1);
+}
 
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 } as const;
 
@@ -101,6 +141,9 @@ interface Session {
   createdAt: number;
   lastAccessAt: number;
   finished: boolean;
+  /** Authenticated owner; null only when auth mode is open (local). */
+  ownerId: string | null;
+  tenantId: string | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -113,12 +156,17 @@ function pruneSessions(now = Date.now()): void {
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
+  return readBodyLimited(req, MAX_BODY_BYTES);
+}
+
+/** Session is visible/mutable only to its owner (or anyone in open/local mode). */
+function sessionOwnedBy(
+  session: Session,
+  caller: CopilotCaller | null,
+): boolean {
+  if (session.ownerId === null) return true;
+  if (!caller) return false;
+  return session.ownerId === caller.callerId && session.tenantId === caller.tenantId;
 }
 
 function send(
@@ -218,6 +266,26 @@ async function handle(
         build_time: BUILD_TIME,
         entrypoint: 'http-turn-stream',
         provider: providerName(),
+        auth_mode: authConfig.mode,
+      });
+      return;
+    }
+
+    // All /v1/* routes require inbound auth (AIO-39) when mode=required.
+    const auth = authenticateCopilotRequest(req, authConfig);
+    if (!auth.ok) {
+      done(auth.status, { error: auth.error, message: auth.message });
+      return;
+    }
+    const caller = auth.caller;
+    const tenantDenied = assertCallerTenantAccess(
+      caller,
+      callerTenantFromRequest(req),
+    );
+    if (tenantDenied) {
+      done(tenantDenied.status, {
+        error: tenantDenied.error,
+        message: tenantDenied.message,
       });
       return;
     }
@@ -299,6 +367,8 @@ async function handle(
         createdAt: now,
         lastAccessAt: now,
         finished: false,
+        ownerId: caller?.callerId ?? null,
+        tenantId: caller?.tenantId ?? null,
       });
 
       done(201, {
@@ -307,13 +377,19 @@ async function handle(
         industry,
         provider: providerName(),
         briefing: copilot.context.briefing,
+        ...(caller
+          ? { callerId: caller.callerId, tenantId: caller.tenantId }
+          : {}),
       });
       return;
     }
 
     if (method === 'GET' && path === '/v1/sessions') {
       pruneSessions();
-      const items = [...sessions.values()].map((s) => ({
+      const owned = [...sessions.values()].filter((s) =>
+        sessionOwnedBy(s, caller),
+      );
+      const items = owned.map((s) => ({
         sessionId: s.id,
         callId: s.callId,
         industry: s.industry,
@@ -330,7 +406,8 @@ async function handle(
     if (sessionIdMatch && (method === 'GET' || method === 'DELETE')) {
       const sessionId = decodeURIComponent(sessionIdMatch[1]!);
       const session = sessions.get(sessionId);
-      if (!session) {
+      if (!session || !sessionOwnedBy(session, caller)) {
+        // Do not leak existence of another caller's session.
         done(404, { error: 'session_not_found' });
         return;
       }
@@ -357,7 +434,7 @@ async function handle(
     const turnMatch = path.match(/^\/v1\/sessions\/([^/]+)\/turns$/);
     if (method === 'POST' && turnMatch) {
       const session = sessions.get(decodeURIComponent(turnMatch[1]!));
-      if (!session) {
+      if (!session || !sessionOwnedBy(session, caller)) {
         done(404, { error: 'session_not_found' });
         return;
       }
@@ -398,7 +475,7 @@ async function handle(
     const feedbackMatch = path.match(/^\/v1\/sessions\/([^/]+)\/feedback$/);
     if (method === 'POST' && feedbackMatch) {
       const session = sessions.get(decodeURIComponent(feedbackMatch[1]!));
-      if (!session) {
+      if (!session || !sessionOwnedBy(session, caller)) {
         done(404, { error: 'session_not_found' });
         return;
       }
@@ -446,7 +523,7 @@ async function handle(
     const finishMatch = path.match(/^\/v1\/sessions\/([^/]+)\/finish$/);
     if (method === 'POST' && finishMatch) {
       const session = sessions.get(decodeURIComponent(finishMatch[1]!));
-      if (!session) {
+      if (!session || !sessionOwnedBy(session, caller)) {
         done(404, { error: 'session_not_found' });
         return;
       }
@@ -522,12 +599,25 @@ async function handle(
 
     done(404, { error: 'not_found', path });
   } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      done(413, {
+        error: 'payload_too_large',
+        message: err.message,
+        maxBytes: err.maxBytes,
+      });
+      return;
+    }
     log('error', 'http_error', {
       operation: `${method} ${path}`,
       error: err instanceof Error ? err.message : 'unknown',
     });
     send(res, 500, { error: 'internal_error' });
   }
+}
+
+/** Test helper: replace auth config after import (node:test isolation). */
+export function setAuthConfigForTests(next: CopilotAuthConfig): void {
+  authConfig = next;
 }
 
 export function createCopilotServer(): http.Server {

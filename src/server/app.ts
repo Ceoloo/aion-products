@@ -40,6 +40,11 @@ import {
   resolveRuntimeUrl,
   runtimeClientOptionsFromEnv,
 } from '../platform/runtime-client.ts';
+import {
+  BodyTooLargeError,
+  DEFAULT_MAX_BODY_BYTES,
+  readBodyLimited,
+} from './read-body.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 4173);
@@ -48,6 +53,9 @@ const PORT = Number(process.env.PORT ?? 4173);
 // operator then opens http://<lan-ip>:PORT/?token=<secret> on the phone).
 const HOST = process.env.AION_HOST ?? '127.0.0.1';
 const TOKEN = (process.env.AION_TOKEN ?? '').trim();
+const MAX_BODY_BYTES = Number(
+  process.env.COPILOT_MAX_BODY_BYTES ?? DEFAULT_MAX_BODY_BYTES,
+);
 const DATA_DIR = process.env.AION_DATA_DIR ?? join(process.cwd(), 'data');
 /** Runtime-backed when AION_RUNTIME_URL is set; else Json under DATA_DIR. */
 let store: SessionStore = createSessionStore({ dataDir: DATA_DIR });
@@ -147,11 +155,10 @@ function buildContext(payload: any, industry: string): ContextInput {
 }
 
 async function readBody(req: IncomingMessage): Promise<any> {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
-  if (chunks.length === 0) return {};
+  const raw = await readBodyLimited(req, MAX_BODY_BYTES);
+  if (!raw.trim()) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    return JSON.parse(raw);
   } catch {
     return {};
   }
@@ -266,6 +273,28 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const path = url.pathname;
   const method = req.method ?? 'GET';
 
+  try {
+    await handleInner(req, res, url, path, method);
+  } catch (e) {
+    if (e instanceof BodyTooLargeError) {
+      json(res, 413, {
+        error: 'payload_too_large',
+        message: e.message,
+        maxBytes: e.maxBytes,
+      });
+      return;
+    }
+    throw e;
+  }
+}
+
+async function handleInner(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  path: string,
+  method: string,
+): Promise<void> {
   // Token gate for the API when AION_TOKEN is set (required for safe LAN use).
   // The console page itself loads without a token and forwards it on API calls.
   if (TOKEN && path.startsWith('/api/')) {
@@ -548,7 +577,10 @@ export function start(): void {
   warnIfDataDirCommittable();
   const loopback = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
   if (!loopback && !TOKEN) {
-    console.warn(`⚠ Binding to ${HOST} without AION_TOKEN — unauthenticated routes handling PII would be reachable on the network. Set AION_TOKEN=<secret> (open /?token=<secret>) or use a trusted network/tunnel.`);
+    console.error(
+      `Refusing to bind to ${HOST} without AION_TOKEN — unauthenticated PII routes would be network-reachable. Set AION_TOKEN=<secret> or bind to 127.0.0.1.`,
+    );
+    process.exit(1);
   }
   const server = createServer((req, res) => {
     handle(req, res).catch((e) => {
