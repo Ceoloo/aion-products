@@ -19,6 +19,8 @@ import {
   SESSION_TTL_SECONDS,
   checkLoginSecret,
   makeSessionCookieValue,
+  revokeSessionSid,
+  sessionSidFromCookie,
   verifySessionCookieValue,
 } from './lib/session.js';
 
@@ -46,6 +48,9 @@ app.post('/api/login', async (c) => {
 });
 
 app.post('/api/logout', (c) => {
+  const raw = getCookie(c, SESSION_COOKIE_NAME);
+  const sid = sessionSidFromCookie(raw);
+  if (sid) revokeSessionSid(sid);
   deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
   return c.json({ ok: true });
 });
